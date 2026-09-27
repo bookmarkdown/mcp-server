@@ -28,3 +28,6 @@ pnpm-debug.log*
 .idea/
 .DS_Store
 Thumbs.db
+
+# Local implementation plans, research, and change tracking
+.copilot-tracking/
