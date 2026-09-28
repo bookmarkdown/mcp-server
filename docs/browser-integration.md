@@ -7,7 +7,9 @@ ms.topic: how-to
 
 ## 狀態與驗證範圍
 
-此 repository 的原始碼與一般 Node.js WebSocket client 測試確認 server-side contract。Companion extension 已實作 protocol v2 handshake、probe、browser RPC 與網路錯誤後的退避重連；其單元測試涵蓋 handshake、probe、browser operations 和設定，但沒有重連／退避專項測試。真實 Chrome extension 互通性、extension 權限、Chrome Local Network Access，以及指定 MCP host 的整合尚未驗證。以下 JavaScript 僅示範 server 接受的訊息形狀，不代表已在 Chrome 中完成整合驗證。
+Browser integration 的 server 與 companion extension 實作已完成。此 repository 的原始碼與一般 Node.js WebSocket client 測試確認 server-side contract；companion extension 已實作 protocol v2 handshake、probe、browser RPC 與網路錯誤後的退避重連，其單元測試涵蓋 handshake、probe、browser operations 和設定，但沒有重連／退避專項測試。真實 Chrome extension 互通性、extension 權限、Chrome Local Network Access，以及指定 MCP host 的相容性驗證仍未完成。以下 JavaScript 示範 server 接受的訊息形狀。
+
+Browser integration 文件應涵蓋的範圍與維護規則見[文件規約](documentation-conventions.md)。
 
 ## 連線條件
 

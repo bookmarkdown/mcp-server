@@ -1,85 +1,63 @@
----
-title: "BookMarkdown MCP Server"
-description: "在本機啟動 browser tool daemon，並由 stdio MCP proxy 對接 MCP host。"
-ms.date: 2026-09-28
-ms.topic: overview
----
+# BookMarkdown MCP Server
 
-## 專案用途
+[English](README.md) | [繁體中文](README.zh-TW.md)
 
-BookMarkdown MCP Server 使用兩個本機程序：你在終端啟動 foreground daemon；MCP host 啟動 stdio proxy。瀏覽器 extension 連線到 daemon 的 loopback WebSocket，proxy 則透過 Windows Named Pipe 將工具呼叫交給 daemon。
+BookMarkdown MCP Server connects an MCP host to a companion browser extension running on the same machine. A local daemon accepts the extension connection over a loopback WebSocket, while an MCP host communicates with a separate stdio proxy over a Windows named pipe.
 
 > [!IMPORTANT]
-> 套件維持 `private`。Companion extension 已有 WebSocket client 與 browser RPC 實作，相關單元測試已通過；但真實 Chrome 整合、Chrome Local Network Access 與指定 MCP host 的互通性尚未驗證。Extension 的重連實作尚無專項自動化測試。
+> This project currently supports Windows only. The server and companion extension implementations are complete; compatibility has not been verified in a real Chrome installation, with Chrome Local Network Access, or with a specific MCP host. The npm package is not published; install from source using the instructions below.
 
-## 提供工具
+## Features
 
-* `devices.list` 列出目前 daemon 已知的 extension instances，可選擇查詢分頁數。
-* `browser.countOpenTabs` 與 `browser.countOpenWindows` 查詢指定 instance 的一般視窗分頁數或視窗數。
-* `browser.listTabs` 回傳一般視窗中最多 10 個分頁的標題與 URL metadata。
-* `browser.openTab`、`browser.closeTab` 與 `browser.moveTab` 操作一般視窗中的分頁；移動只支援跨視窗。
+The server exposes these MCP tools:
 
-分頁標題與 URL 可能包含敏感資訊；工具不讀取頁面內容。Extension 必須從計數與清單排除 incognito 視窗和分頁。開啟、關閉與移動分頁會改變瀏覽器狀態，結果不明時不會自動重送。instance 狀態只存在 daemon 記憶體中，daemon 結束後不保留。
+| Tool | Description |
+| --- | --- |
+| `devices.list` | List extension instances known to the running daemon and optionally query tab counts. |
+| `browser.countOpenTabs` | Count tabs in normal windows for one connected instance. |
+| `browser.countOpenWindows` | Count normal browser windows for one connected instance. |
+| `browser.listTabs` | Return paginated tab metadata, limited to 10 tabs per request. |
+| `browser.openTab` | Open a tab in a normal window. |
+| `browser.closeTab` | Close a tab in a normal window. |
+| `browser.moveTab` | Move a tab to another normal window. |
 
-功能與限制詳見[功能說明](docs/features.md)。瀏覽器端連線、hello/ack 與 RPC 範例見[瀏覽器整合指南](docs/browser-integration.md)。
+Tab titles and URLs may contain sensitive information. The server does not read page contents. The extension is expected to exclude incognito windows and tabs. Tab changes are not automatically retried when the result is unknown.
 
-## 本機啟動
+See [Features and limitations (Traditional Chinese)](docs/features.md), [Architecture (Traditional Chinese)](docs/architecture.md), the [browser integration guide (Traditional Chinese)](docs/browser-integration.md), and [documentation conventions (Traditional Chinese)](docs/documentation-conventions.md).
 
-### 需求
+## Requirements
 
-* Node.js 24.11.0 或更新版本
+* Windows
+* Node.js 24.11.0 or later
 * npm
-* Windows Named Pipe 支援
-* 正式模式需設定精確 extension ID 與配對 token；開發模式只需配對 token
+* A compatible companion browser extension (maintained separately)
 
-### 安裝與建置
+## Install from source
 
-```shell
+```powershell
 git clone https://github.com/bookmarkdown/mcp-server.git
 cd mcp-server
 npm ci
 npm run build
 ```
 
-### 正式模式啟動 daemon
+The npm package is marked private and is not available through `npx` at this time.
 
-正式模式需要高熵配對 token 與精確 extension ID。companion extension 必須使用相同 token。不要將 token 放入命令列、URL、記錄檔或原始碼管理。
+## Start the daemon
 
-```powershell
-$env:BOOKMARKDOWN_BRIDGE_TOKEN = (node -p "require('node:crypto').randomBytes(32).toString('hex')")
-$env:BOOKMARKDOWN_EXTENSION_IDS = "<exact-32-character-extension-id>"
-npm start -- daemon
-```
-
-`npm start -- daemon`、`node dist/cli.js daemon` 與套件 CLI 預設使用正式模式。`--` 是 npm 用來轉交子命令參數的分隔符，不是 daemon 的參數。CLI 本身只接受 `daemon` 或 `proxy`。daemon 會在前景執行；以 `Ctrl+C` 停止。
-
-### 開發模式啟動 daemon
-
-開發模式不讀取 `BOOKMARKDOWN_EXTENSION_IDS`，接受任何符合 `[a-p]{32}` 的 `chrome-extension://` Origin。它仍要求配對 token，且 hello 中的 extension ID 必須與 Origin ID 相同。
+The production daemon requires a high-entropy pairing token and the exact Chrome extension ID. The companion extension must be configured with the same token through its supported configuration flow.
 
 ```powershell
 $env:BOOKMARKDOWN_BRIDGE_TOKEN = (node -p "require('node:crypto').randomBytes(32).toString('hex')")
-Remove-Item Env:BOOKMARKDOWN_EXTENSION_IDS -ErrorAction SilentlyContinue
-npm run dev -- daemon
-```
-
-`npm run dev -- daemon` 會明確使用開發模式，不依 `NODE_ENV` 判斷。開發與正式模式都只綁定 `127.0.0.1`，並使用相同的配對 token 驗證。
-
-### 覆寫選用設定
-
-其餘 daemon 設定都有預設值，通常不必設定。需要更換 WebSocket port 或延長請求逾時時，在同一個 PowerShell 視窗設定環境變數，再啟動 daemon：
-
-```powershell
-$env:BOOKMARKDOWN_WS_PORT = "38472"
-$env:BOOKMARKDOWN_REQUEST_TIMEOUT_MS = "8000"
+$env:BOOKMARKDOWN_EXTENSION_IDS = "<32-character-extension-id>"
 npm start -- daemon
 ```
 
-關閉該 PowerShell 視窗後，這些環境變數不會保留。完整可選設定與範圍列在下方。
+Keep the daemon running in this terminal. Press `Ctrl+C` to stop it. Do not put the pairing token in command-line arguments, URLs, logs, or source control.
 
-### 設定 MCP host
+## Configure an MCP host
 
-在 MCP host 設定中，以 `node` 執行建置後的 CLI，並將 `proxy` 作為唯一參數。請將路徑替換成此 repository 的絕對路徑：
+Configure your MCP host to start the built CLI in proxy mode. Replace the example path with the absolute path to your checkout:
 
 ```json
 {
@@ -92,31 +70,13 @@ npm start -- daemon
 }
 ```
 
-MCP host 只啟動 proxy；proxy 不會啟動 daemon，也不需要 WebSocket token。daemon 尚未啟動時，proxy 仍可完成 MCP initialize 與 `tools/list`，工具呼叫會回報 `DAEMON_UNAVAILABLE`。
+The MCP host starts only the proxy; it does not start the daemon. The proxy uses the default Windows named pipe, `bookmarkdown-mcp`, and does not need the WebSocket pairing token. Start the daemon before using browser tools.
 
-私人本機實驗或測試需要使用另一個 Named Pipe 時，可在啟動 daemon 的環境與 MCP host 啟動 proxy 的環境中，將 `BOOKMARKDOWN_IPC_PIPE_NAME` 設為相同名稱。未設定時兩端都使用 `bookmarkdown-mcp`。此設定不會變更已在執行的 daemon。
+## Security and privacy
 
-## Configuration
-
-以下環境變數由 daemon 使用：
-
-| 環境變數 | 預設值 | 範圍 |
-| --- | --- | --- |
-| `BOOKMARKDOWN_BRIDGE_TOKEN` | 無 | 必填，32 至 512 UTF-8 bytes |
-| `BOOKMARKDOWN_EXTENSION_IDS` | 無 | 正式模式必填，逗號分隔的精確 Chrome extension ID，格式為 `[a-p]{32}`；開發模式不讀取 |
-| `BOOKMARKDOWN_WS_PORT` | `38471` | `1` 至 `65535` |
-| `BOOKMARKDOWN_MAX_PAYLOAD_BYTES` | `65536` | `1024` 至 `1048576` |
-| `BOOKMARKDOWN_MAX_PENDING_REQUESTS` | `32` | `1` 至 `256` |
-| `BOOKMARKDOWN_MAX_CONNECTIONS` | `8` | `1` 至 `64` |
-| `BOOKMARKDOWN_MAX_REGISTERED_INSTANCES` | `64` | `1` 至 `256` |
-| `BOOKMARKDOWN_REQUEST_TIMEOUT_MS` | `5000` | `100` 至 `60000` |
-| `BOOKMARKDOWN_HELLO_TIMEOUT_MS` | `5000` | `250` 至 `30000` |
-
-WebSocket 固定綁定 `127.0.0.1`。設定無效或 listener 無法啟動時，daemon 會回復已開啟的資源並以非零狀態結束，不會改用其他 port。proxy 與 daemon 預設使用 Windows Named Pipe `\\.\pipe\bookmarkdown-mcp` 通訊。選用的 `BOOKMARKDOWN_IPC_PIPE_NAME` 只接受以英數字開頭、長度最多 128 字元的名稱，其餘字元可為英數字、句點、底線或連字號。
+The WebSocket server binds only to `127.0.0.1`. Connections require a pairing token; production mode also checks an exact extension ID allowlist. Tab titles and URLs are returned as metadata and may be sensitive. Do not record or share tool results without considering their contents.
 
 ## Development
-
-執行測試、型別檢查與建置：
 
 ```powershell
 npm test
@@ -124,4 +84,8 @@ npm run typecheck
 npm run build
 ```
 
-CLI 必須指定 `daemon` 或 `proxy`。開發期間可使用 `npm run dev -- daemon` 啟動開發模式 daemon；MCP host 可使用 `npm run dev -- proxy` 或建置後的 `node dist/cli.js proxy`。Proxy 不依 daemon 的 runtime mode 限制連線。
+For development mode, start the daemon with `npm run dev -- daemon`. Development mode still requires the pairing token. See the [browser integration guide](docs/browser-integration.md) for the current WebSocket contract and validation limits.
+
+## License
+
+No license file is currently included. Do not assume permission to reuse or redistribute this code.

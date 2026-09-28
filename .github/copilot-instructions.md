@@ -52,7 +52,7 @@ Extension 必須在計數與清單中排除 incognito 視窗和分頁；server �
 * `README.md` 是 GitHub repository 首頁，優先呈現專案用途、需求、安裝與啟動方式、設定入口及狀態；不要只放內部開發筆記。
 * `docs/features.md` 說明目前實際可用功能、輸入輸出、限制與未實作項目。功能改變時同步更新此頁。
 * 只有設定、啟動或使用流程改變時才同步更新 README；避免把完整功能規格複製到 README。
-* 所有 Markdown 使用 YAML frontmatter，依檔案位置填入 `title`、`description` 等必要欄位；有 `title` 時正文從 H2 開始。
+* 公開首頁 `README.md` 與 `README.zh-TW.md` 不使用 YAML frontmatter，從 H1 專案名稱開始，避免 GitHub 將 metadata 顯示為正文。其他 Markdown 使用 YAML frontmatter，依檔案位置填入 `title`、`description` 等必要欄位；有 `title` 時正文從 H2 開始。
 * 使用清楚、精簡的繁體中文說明；以程式碼和測試為準，不把計畫、提案或未驗證的整合寫成既有功能。
 
 ## 工作流程
