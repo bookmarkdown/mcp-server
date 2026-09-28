@@ -1,0 +1,68 @@
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/@bookmarkdown/mcp-server
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.11.0
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Upgrade npm for trusted publishing
+        run: npm install --global npm@11.5.1
+      - name: Install dependencies
+        run: npm ci
+      - name: Run tests
+        run: npm test
+      - name: Type check
+        run: npm run typecheck
+      - name: Verify package contents
+        run: npm run verify:pack
+      - name: Verify tag matches package version
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          $expectedTag = "v$version"
+          if ($env:GITHUB_REF_NAME -ne $expectedTag) {
+            throw "Tag $env:GITHUB_REF_NAME does not match package version $version."
+          }
+          git merge-base --is-ancestor $env:GITHUB_SHA origin/main
+          if ($LASTEXITCODE -ne 0) {
+            throw "Tagged commit $env:GITHUB_SHA is not reachable from main."
+          }
+      - name: Check whether this version is already published
+        id: registry
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          $publishedVersion = npm view "@bookmarkdown/mcp-server@$version" version --json 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            $publishedVersion = ($publishedVersion -join "`n") | ConvertFrom-Json
+            if ($publishedVersion -ne $version) {
+              throw "Registry returned unexpected version: $publishedVersion"
+            }
+            "already-published=true" >> $env:GITHUB_OUTPUT
+          } else {
+            "already-published=false" >> $env:GITHUB_OUTPUT
+          }
+      - name: Publish package with npm trusted publishing
+        if: steps.registry.outputs.already-published != 'true'
+        run: npm publish --access public
