@@ -5,7 +5,7 @@
 BookMarkdown MCP Server 讓 MCP host 與同一台電腦上的 companion browser extension 溝通。本機 daemon 透過 loopback WebSocket 接受 extension 連線；MCP host 則透過 Windows Named Pipe 與獨立的 stdio proxy 通訊。
 
 > [!IMPORTANT]
-> 本專案目前僅支援 Windows。Server 與 companion extension 的串接實作已完成；真實 Chrome、Chrome Local Network Access 與指定 MCP host 的相容性尚未驗證。npm 發布流程正在準備中；請依下方步驟從原始碼安裝。
+> 本專案目前僅支援 Windows。`@mesak/bmd-mcp-server` 的 `0.1.1` 版已可從 npm registry 查詢，但乾淨 Windows 環境的安裝 smoke test 尚未完成。Server 與 companion extension 的串接實作已完成；真實 Chrome、Chrome Local Network Access 與指定 MCP host 的相容性尚未驗證。
 
 ## 功能
 
@@ -41,13 +41,7 @@ npm ci
 npm run build
 ```
 
-首次 npm 版本發布前，尚不能透過 `npx` 安裝。發布後，請以實際發布版本執行 CLI：
-
-```powershell
-npx --yes --package=@mesak/bmd-mcp-server@<version> -- bookmarkdown-mcp-server
-```
-
-啟動 daemon 前，請先設定下方列出的必要環境變數。
+`@mesak/bmd-mcp-server@0.1.1` 已可從 npm 安裝。請使用下方的 `npx` 命令執行已發布套件；乾淨 Windows 環境的安裝 smoke test 尚待完成。
 
 ## 啟動 daemon
 
@@ -56,21 +50,21 @@ npx --yes --package=@mesak/bmd-mcp-server@<version> -- bookmarkdown-mcp-server
 ```powershell
 $env:BOOKMARKDOWN_BRIDGE_TOKEN = (node -p "require('node:crypto').randomBytes(32).toString('hex')")
 $env:BOOKMARKDOWN_EXTENSION_IDS = "<32-character-extension-id>"
-npm start
+npx --yes --package=@mesak/bmd-mcp-server@0.1.1 -- bookmarkmarkdown-mcp-server
 ```
 
-請讓 daemon 持續在此終端執行；按 `Ctrl+C` 停止。不要將配對 token 放入命令列參數、URL、記錄檔或原始碼管理。
+請讓 daemon 持續在此終端執行；按 `Ctrl+C` 停止。從原始碼 checkout 啟動時，請改用 `npm start`。不要將配對 token 放入命令列參數、URL、記錄檔或原始碼管理。
 
 ## 設定 MCP host
 
-設定 MCP host 以 proxy 模式啟動建置後的 CLI。請將範例路徑換成此 repository 的絕對路徑：
+設定 MCP host 以 proxy 模式啟動已發布的 CLI：
 
 ```json
 {
   "mcpServers": {
     "bookmarkdown": {
-      "command": "node",
-      "args": ["D:/path/to/mcp-server/dist/cli.js", "proxy"]
+      "command": "npx",
+      "args": ["--yes", "--package=@mesak/bmd-mcp-server@0.1.1", "--", "bookmarkdown-mcp-server", "proxy"]
     }
   }
 }

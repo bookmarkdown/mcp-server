@@ -5,7 +5,7 @@
 BookMarkdown MCP Server connects an MCP host to a companion browser extension running on the same machine. A local daemon accepts the extension connection over a loopback WebSocket, while an MCP host communicates with a separate stdio proxy over a Windows named pipe.
 
 > [!IMPORTANT]
-> This project currently supports Windows only. The server and companion extension implementations are complete; compatibility has not been verified in a real Chrome installation, with Chrome Local Network Access, or with a specific MCP host. npm publication is being prepared; install from source using the instructions below.
+> This project currently supports Windows only. Version `0.1.1` of `@mesak/bmd-mcp-server` is visible on npm, but a clean Windows installation smoke test is still pending. The server and companion extension implementations are complete; compatibility has not been verified in a real Chrome installation, with Chrome Local Network Access, or with a specific MCP host.
 
 ## Features
 
@@ -41,13 +41,7 @@ npm ci
 npm run build
 ```
 
-The package is not available through `npx` until its first npm release. After publication, run the CLI with the published version:
-
-```powershell
-npx --yes --package=@mesak/bmd-mcp-server@<version> -- bookmarkdown-mcp-server
-```
-
-Set the required environment variables below before starting the daemon.
+Version `0.1.1` is available on npm. Use the `npx` commands below to run the published package. A clean Windows installation smoke test is still pending.
 
 ## Start the daemon
 
@@ -56,21 +50,21 @@ The CLI starts the production daemon when you omit the subcommand. The productio
 ```powershell
 $env:BOOKMARKDOWN_BRIDGE_TOKEN = (node -p "require('node:crypto').randomBytes(32).toString('hex')")
 $env:BOOKMARKDOWN_EXTENSION_IDS = "<32-character-extension-id>"
-npm start
+npx --yes --package=@mesak/bmd-mcp-server@0.1.1 -- bookmarkmarkdown-mcp-server
 ```
 
-Keep the daemon running in this terminal. Press `Ctrl+C` to stop it. Do not put the pairing token in command-line arguments, URLs, logs, or source control.
+Keep the daemon running in this terminal. Press `Ctrl+C` to stop it. When running from a source checkout, use `npm start` instead. Do not put the pairing token in command-line arguments, URLs, logs, or source control.
 
 ## Configure an MCP host
 
-Configure your MCP host to start the built CLI in proxy mode. Replace the example path with the absolute path to your checkout:
+Configure your MCP host to start the published CLI in proxy mode:
 
 ```json
 {
   "mcpServers": {
     "bookmarkdown": {
-      "command": "node",
-      "args": ["D:/path/to/mcp-server/dist/cli.js", "proxy"]
+      "command": "npx",
+      "args": ["--yes", "--package=@mesak/bmd-mcp-server@0.1.1", "--", "bookmarkdown-mcp-server", "proxy"]
     }
   }
 }

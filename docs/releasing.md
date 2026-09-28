@@ -1,13 +1,13 @@
 ---
 title: "Release Process"
 description: "BookMarkdown MCP server 的 GitFlow、Changesets 版本管理與 npm 發布流程。"
-ms.date: 2026-09-28
+ms.date: 2026-09-29
 ms.topic: how-to
 ---
 
 ## Release status
 
-The package `@mesak/bmd-mcp-server` is configured for public npm publication, but it has not been published. The `npx` command is not available until the first version appears in the npm registry and an installation smoke test passes.
+`@mesak/bmd-mcp-server@0.1.1` is visible on npm. A clean Windows installation smoke test is still required before claiming that the published installation flow has been verified.
 
 The repository contains CI, Changesets, and tag-publishing workflows. The project uses the MIT license. The `develop` branch, branch protection rules, npm trusted publisher, and protected `npm` GitHub environment still require maintainer setup.
 
