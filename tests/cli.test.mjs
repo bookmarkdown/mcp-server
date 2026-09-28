@@ -169,11 +169,25 @@ class McpProxyProcess {
   }
 }
 
-test('requires exactly one daemon or proxy subcommand', async () => {
-  for (const args of [[], ['browser'], ['proxy', 'extra'], ['--', 'proxy']]) {
+test('defaults to daemon when no subcommand is provided', async () => {
+  const result = await runCli([], {
+    BOOKMARKDOWN_BRIDGE_TOKEN: '',
+    BOOKMARKDOWN_EXTENSION_IDS: '',
+  });
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /BOOKMARKDOWN_BRIDGE_TOKEN is required/);
+  assert.doesNotMatch(result.stderr, /Usage:/);
+  assert.equal(result.stdout, '');
+});
+
+test('rejects invalid or extra subcommand arguments', async () => {
+  for (const args of [['browser'], ['proxy', 'extra'], ['--', 'proxy']]) {
     const result = await runCli(args);
     assert.notEqual(result.code, 0);
-    assert.match(result.stderr, /Usage: bookmarkdown-mcp-server <daemon\|proxy>/);
+    assert.match(
+      result.stderr,
+      /Usage: bookmarkdown-mcp-server \[daemon\|proxy\] \(defaults to daemon\)/,
+    );
     assert.equal(result.stdout, '');
   }
 });

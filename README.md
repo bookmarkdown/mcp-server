@@ -5,7 +5,7 @@
 BookMarkdown MCP Server connects an MCP host to a companion browser extension running on the same machine. A local daemon accepts the extension connection over a loopback WebSocket, while an MCP host communicates with a separate stdio proxy over a Windows named pipe.
 
 > [!IMPORTANT]
-> This project currently supports Windows only. The server and companion extension implementations are complete; compatibility has not been verified in a real Chrome installation, with Chrome Local Network Access, or with a specific MCP host. The npm package is not published; install from source using the instructions below.
+> This project currently supports Windows only. The server and companion extension implementations are complete; compatibility has not been verified in a real Chrome installation, with Chrome Local Network Access, or with a specific MCP host. npm publication is being prepared; install from source using the instructions below.
 
 ## Features
 
@@ -41,16 +41,16 @@ npm ci
 npm run build
 ```
 
-The npm package is marked private and is not available through `npx` at this time.
+The package is not available through `npx` until its first npm release. Release preparation is tracked in this repository.
 
 ## Start the daemon
 
-The production daemon requires a high-entropy pairing token and the exact Chrome extension ID. The companion extension must be configured with the same token through its supported configuration flow.
+The CLI starts the production daemon when you omit the subcommand. The production daemon requires a high-entropy pairing token and the exact Chrome extension ID. The companion extension must be configured with the same token through its supported configuration flow.
 
 ```powershell
 $env:BOOKMARKDOWN_BRIDGE_TOKEN = (node -p "require('node:crypto').randomBytes(32).toString('hex')")
 $env:BOOKMARKDOWN_EXTENSION_IDS = "<32-character-extension-id>"
-npm start -- daemon
+npm start
 ```
 
 Keep the daemon running in this terminal. Press `Ctrl+C` to stop it. Do not put the pairing token in command-line arguments, URLs, logs, or source control.

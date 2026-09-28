@@ -9,12 +9,15 @@ export async function runCli(
   runtimeMode: RuntimeMode = 'production',
 ): Promise<void> {
   try {
-    const [mode, ...extraArguments] = process.argv.slice(2);
+    const [requestedMode, ...extraArguments] = process.argv.slice(2);
+    const mode = requestedMode ?? 'daemon';
     if (
       (mode !== 'daemon' && mode !== 'proxy') ||
       extraArguments.length > 0
     ) {
-      throw new Error('Usage: bookmarkdown-mcp-server <daemon|proxy>.');
+      throw new Error(
+        'Usage: bookmarkdown-mcp-server [daemon|proxy] (defaults to daemon).',
+      );
     }
 
     if (mode === 'daemon') {

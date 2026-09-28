@@ -9,13 +9,13 @@ ms.topic: reference
 
 使用者手動在前景啟動 daemon。daemon 擁有 loopback WebSocket listener、extension 連線、工具執行與記憶體內 instance 狀態。MCP host 啟動 stdio proxy；proxy 透過 Windows Named Pipe `\\.\pipe\bookmarkdown-mcp` 將工具呼叫送往 daemon，不會代為啟動 daemon。
 
-CLI 僅接受 `daemon` 或 `proxy`：
+CLI 接受 `daemon` 或 `proxy`；省略子命令時預設啟動 `daemon`：
 
 ```powershell
-npm start -- daemon
+npm start
 ```
 
-`npm start -- daemon`、`node dist/cli.js daemon` 與套件 CLI 預設使用正式模式，要求設定精確的 `BOOKMARKDOWN_EXTENSION_IDS`。`npm run dev -- daemon` 明確啟動開發模式，不需要固定 ID allowlist，也不依 `NODE_ENV` 判斷模式。兩種模式都需要配對 token。daemon 設定錯誤或 listener 啟動失敗時會清理已開啟的資源並以非零狀態結束；不會掃描替代 port。
+`npm start`、`npm start -- daemon`、`node dist/cli.js` 與 `node dist/cli.js daemon` 都會以正式模式啟動 daemon，並要求設定精確的 `BOOKMARKDOWN_EXTENSION_IDS`。`npm start -- proxy` 或 `node dist/cli.js proxy` 會啟動 MCP proxy。`npm run dev -- daemon` 明確啟動開發模式，不需要固定 ID allowlist，也不依 `NODE_ENV` 判斷模式。兩種 daemon 模式都需要配對 token。daemon 設定錯誤或 listener 啟動失敗時會清理已開啟的資源並以非零狀態結束；不會掃描替代 port。
 
 proxy 使用 MCP SDK v2 `serveStdio`。MCP 訊息只寫入 stdout，診斷訊息寫入 stderr。daemon 離線時，proxy 仍可 initialize 與列出靜態工具目錄；每次工具呼叫會檢查 daemon 狀態。呼叫已送出後若結果不確定，不會自動重送。
 

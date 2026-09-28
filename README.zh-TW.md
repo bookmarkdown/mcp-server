@@ -5,7 +5,7 @@
 BookMarkdown MCP Server 讓 MCP host 與同一台電腦上的 companion browser extension 溝通。本機 daemon 透過 loopback WebSocket 接受 extension 連線；MCP host 則透過 Windows Named Pipe 與獨立的 stdio proxy 通訊。
 
 > [!IMPORTANT]
-> 本專案目前僅支援 Windows。Server 與 companion extension 的串接實作已完成；真實 Chrome、Chrome Local Network Access 與指定 MCP host 的相容性尚未驗證。npm 套件尚未發布；請依下方步驟從原始碼安裝。
+> 本專案目前僅支援 Windows。Server 與 companion extension 的串接實作已完成；真實 Chrome、Chrome Local Network Access 與指定 MCP host 的相容性尚未驗證。npm 發布流程正在準備中；請依下方步驟從原始碼安裝。
 
 ## 功能
 
@@ -41,16 +41,16 @@ npm ci
 npm run build
 ```
 
-npm 套件目前標記為 private，尚不能透過 `npx` 安裝。
+首次 npm 版本發布前，尚不能透過 `npx` 安裝。發布準備狀態會記錄在此 repository。
 
 ## 啟動 daemon
 
-正式模式需要高熵配對 token 與精確的 Chrome extension ID。Companion extension 必須透過其支援的設定流程使用相同 token。
+未提供子命令時，CLI 會啟動正式模式 daemon。正式模式需要高熵配對 token 與精確的 Chrome extension ID。Companion extension 必須透過其支援的設定流程使用相同 token。
 
 ```powershell
 $env:BOOKMARKDOWN_BRIDGE_TOKEN = (node -p "require('node:crypto').randomBytes(32).toString('hex')")
 $env:BOOKMARKDOWN_EXTENSION_IDS = "<32-character-extension-id>"
-npm start -- daemon
+npm start
 ```
 
 請讓 daemon 持續在此終端執行；按 `Ctrl+C` 停止。不要將配對 token 放入命令列參數、URL、記錄檔或原始碼管理。
