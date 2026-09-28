@@ -41,7 +41,13 @@ npm ci
 npm run build
 ```
 
-The package is not available through `npx` until its first npm release. Release preparation is tracked in this repository.
+The package is not available through `npx` until its first npm release. After publication, run the CLI with the published version:
+
+```powershell
+npx --yes --package=@mesak/bmd-mcp-server@<version> -- bookmarkdown-mcp-server
+```
+
+Set the required environment variables below before starting the daemon.
 
 ## Start the daemon
 

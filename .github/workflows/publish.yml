@@ -14,7 +14,7 @@ jobs:
     runs-on: windows-latest
     environment:
       name: npm
-      url: https://www.npmjs.com/package/@bookmarkdown/mcp-server
+      url: https://www.npmjs.com/package/@mesak/bmd-mcp-server
     steps:
       - name: Check out tagged source
         uses: actions/checkout@v4
@@ -53,7 +53,7 @@ jobs:
         shell: pwsh
         run: |
           $version = node -p "require('./package.json').version"
-          $publishedVersion = npm view "@bookmarkdown/mcp-server@$version" version --json 2>$null
+          $publishedVersion = npm view "@mesak/bmd-mcp-server@$version" version --json 2>$null
           if ($LASTEXITCODE -eq 0) {
             $publishedVersion = ($publishedVersion -join "`n") | ConvertFrom-Json
             if ($publishedVersion -ne $version) {

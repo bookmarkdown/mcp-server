@@ -41,7 +41,13 @@ npm ci
 npm run build
 ```
 
-首次 npm 版本發布前，尚不能透過 `npx` 安裝。發布準備狀態會記錄在此 repository。
+首次 npm 版本發布前，尚不能透過 `npx` 安裝。發布後，請以實際發布版本執行 CLI：
+
+```powershell
+npx --yes --package=@mesak/bmd-mcp-server@<version> -- bookmarkdown-mcp-server
+```
+
+啟動 daemon 前，請先設定下方列出的必要環境變數。
 
 ## 啟動 daemon
 

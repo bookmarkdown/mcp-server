@@ -7,7 +7,7 @@ ms.topic: how-to
 
 ## Release status
 
-The package is configured for public npm publication, but it has not been published. The `npx` command is not available until the first version appears in the npm registry and an installation smoke test passes.
+The package `@mesak/bmd-mcp-server` is configured for public npm publication, but it has not been published. The `npx` command is not available until the first version appears in the npm registry and an installation smoke test passes.
 
 The repository contains CI, Changesets, and tag-publishing workflows. The project uses the MIT license. The `develop` branch, branch protection rules, npm trusted publisher, and protected `npm` GitHub environment still require maintainer setup.
 
@@ -42,7 +42,7 @@ Changes that do not affect the npm artifact do not need a Changeset. When uncert
 3. Open a pull request from the release branch to `main`. Merge it only after the required checks pass.
 4. Create and push an annotated `vX.Y.Z` tag on the merged `main` commit, using the version in `package.json`.
 5. The `Publish to npm` workflow validates the tag, tests the package, and publishes through npm Trusted Publishing. The GitHub `npm` environment can require maintainer approval before the job runs.
-6. Confirm the version is visible on npm, then install it in a clean Windows environment and smoke-test `bookmarkdown-mcp-server` before updating the public installation instructions.
+6. Confirm the version is visible on npm, then install it in a clean Windows environment and smoke-test `npx --yes --package=@mesak/bmd-mcp-server@<version> -- bookmarkdown-mcp-server` before updating the public installation instructions.
 7. Merge `main` back into `develop` so release-only changes are retained.
 
 The publish workflow skips the publish command when that exact package version is already in the registry. This supports bootstrapping the first release with a maintainer-authorized manual publish before configuring Trusted Publishing. It does not make an unpublished package available through `npx`.
@@ -52,7 +52,7 @@ The publish workflow skips the publish command when that exact package version i
 Complete these steps before creating the first public release:
 
 1. Confirm the MIT `LICENSE` file and `license` field are included in the release commit and npm tarball.
-2. Confirm an authorized npm account controls the `@bookmarkdown` scope and can publish `@bookmarkdown/mcp-server` as a public package.
+2. Confirm the authorized npm account can publish `@mesak/bmd-mcp-server` as a public package.
 3. Merge the initial release version to `main`, then publish that exact version once from the release commit with an authorized maintainer account and npm's required two-factor authentication.
 4. In npm package settings, add a GitHub Actions trusted publisher for `bookmarkdown/mcp-server`, workflow filename `publish.yml`, and environment `npm`. Allow direct publishing for this publisher.
 5. Create the matching `vX.Y.Z` tag. The workflow verifies the version and skips publishing because the initial version already exists. Later tags publish through OIDC.

@@ -1,4 +1,4 @@
-# @bookmarkdown/mcp-server
+# @mesak/bmd-mcp-server
 
 ## 0.1.1
 
