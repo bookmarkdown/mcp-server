@@ -1,0 +1,31 @@
+name: Changesets
+
+on:
+  push:
+    branches:
+      - develop
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  version-pr:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.11.0
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Create or update version pull request
+        uses: changesets/action@v1
+        env:
+          HOME: ${{ runner.temp }}
+        with:
+          version: npm run version-packages
+          branch: develop
