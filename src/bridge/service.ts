@@ -24,7 +24,6 @@ export interface DeviceListOptions {
 }
 
 interface DeviceListInstance extends Omit<InstanceSnapshot, 'operations'> {
-  displayName: string | null;
   capabilities: { operations: string[] };
   countStatus: 'ok' | 'offline' | 'unsupported' | 'timeout' | 'error' | 'not_requested';
   tabCount: number | null;
@@ -265,7 +264,6 @@ export class BridgeService {
         const { operations, ...instanceDetails } = instance;
         const base = {
           ...instanceDetails,
-          displayName: null,
           capabilities: { operations: [...operations] },
           tabCount: null,
         };

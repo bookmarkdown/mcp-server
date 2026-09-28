@@ -37,7 +37,7 @@ Daemon 僅在使用者需要時執行。MCP host 啟動 proxy；proxy 即使 dae
 ## 啟動生命週期
 
 1. 使用者設定 daemon 環境變數並手動執行 `daemon` 子命令。正式模式驗證配對 token 與精確 extension ID allowlist；開發模式驗證配對 token，不要求固定 ID 清單。Daemon 維持 `127.0.0.1` WebSocket 綁定並啟動 IPC；若設定錯誤或 listener 啟動失敗，整體啟動失敗並以非零狀態退出，不留下半啟動 endpoint，也不掃描其他 port。
-2. 符合目前協定的 extension client 可連線至 daemon WebSocket listener。extension 自動重連屬於 companion extension 的責任，尚未在此 repository 實作或驗證。
+2. 符合目前協定的 extension client 可連線至 daemon WebSocket listener。Companion extension 已實作網路錯誤後的退避重連與重新註冊；此行為由 extension 負責，不在此 repository 實作。重連退避尚無專項自動化測試，真實 Chrome 中的重連也尚未驗證。
 3. MCP host 啟動 `proxy` 子命令。Proxy 使用共用 schema 回應 MCP initialize 與 tools/list，並透過 IPC health check 分開取得 daemon readiness 和 extension connection 狀態。
 4. 若 daemon 離線，MCP stdio 和工具清單仍可用；tools/call 回 `DAEMON_UNAVAILABLE`。Proxy 不啟動 daemon，後續工具呼叫會重新探測並嘗試連線，因此使用者啟動 daemon 後不必重啟 proxy。
 5. Daemon ready 但 extension 未連線時，tools/call 立即回 `EXTENSION_NOT_CONNECTED`，不等待 extension。若 extension 已連線但未回覆，沿用設定的 request timeout。
@@ -58,4 +58,4 @@ Daemon 僅在使用者需要時執行。MCP host 啟動 proxy；proxy 即使 dae
 
 ## 實作與驗證
 
-daemon/proxy 拆分、Windows Named Pipe IPC、health/version handshake、共用工具目錄與 CLI 子命令已實作於此 repository。一般 Node.js 測試涵蓋本機 IPC、WebSocket 認證與 proxy 行為；這些檢查不代表真實 Chrome/extension、Chrome Local Network Access、extension 權限或指定 MCP host 的互通性已驗證。Companion extension 的自動重連仍在本 repository 範圍之外。
+daemon/proxy 拆分、Windows Named Pipe IPC、health/version handshake、共用工具目錄與 CLI 子命令已實作於此 repository。一般 Node.js 測試涵蓋本機 IPC、WebSocket 認證與 proxy 行為；companion extension 的單元測試涵蓋 handshake、probe 和 browser operations。這些測試不代表真實 Chrome/extension、Chrome Local Network Access、extension 權限或指定 MCP host 的互通性已驗證。Companion extension 的重連實作在本 repository 範圍之外，且尚無重連退避專項測試。

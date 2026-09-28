@@ -11,6 +11,7 @@ import {
 export interface InstanceSnapshot {
   appId: string;
   instanceId: string;
+  displayName: string | null;
   extensionId: string;
   browser: string;
   status: 'online' | 'offline';
@@ -48,7 +49,7 @@ export class ConnectionManager {
   public register(
     socket: WebSocket,
     hello: ExtensionHello,
-  ): { ok: true; connectionId: string } | { ok: false; reason: string } {
+  ): { ok: true; connectionId: string; displayName: string | null } | { ok: false; reason: string } {
     const instanceKey = this.#instanceKey(hello.appId, hello.instanceId);
     const previous = this.#instances.get(instanceKey);
     if (previous && previous.extensionId !== hello.extensionId) {
@@ -67,9 +68,13 @@ export class ConnectionManager {
     }
 
     const connectionId = randomUUID();
+    const displayName = hello.displayName === undefined
+      ? previous?.displayName ?? null
+      : this.#uniqueDisplayName(instanceKey, hello.displayName);
     const record: ConnectionRecord = {
       appId: hello.appId,
       instanceId: hello.instanceId,
+      displayName,
       extensionId: hello.extensionId,
       browser: hello.browser,
       connectionId,
@@ -89,7 +94,7 @@ export class ConnectionManager {
       this.#disconnect(record, new BridgeError('EXTENSION_DISCONNECTED'));
     });
 
-    return { ok: true, connectionId };
+    return { ok: true, connectionId, displayName };
   }
 
   public getConnectedInstance(instanceId: string): ConnectedInstance | undefined {
@@ -101,6 +106,7 @@ export class ConnectionManager {
     return {
       appId: record.appId,
       instanceId: record.instanceId,
+      displayName: record.displayName,
       extensionId: record.extensionId,
       browser: record.browser,
       status: 'online',
@@ -114,6 +120,7 @@ export class ConnectionManager {
     return [...this.#instances.values()].map((record) => ({
       appId: record.appId,
       instanceId: record.instanceId,
+      displayName: record.displayName,
       extensionId: record.extensionId,
       browser: record.browser,
       status:
@@ -209,5 +216,20 @@ export class ConnectionManager {
 
   #instanceKey(appId: string, instanceId: string): string {
     return `${appId}\u0000${instanceId}`;
+  }
+
+  #uniqueDisplayName(instanceKey: string, requestedName: string): string {
+    const normalizedName = requestedName.toLowerCase();
+    const takenNames = new Set(
+      [...this.#instances.entries()]
+        .filter(([key]) => key !== instanceKey)
+        .map(([, record]) => record.displayName?.toLowerCase())
+        .filter((name): name is string => name !== undefined),
+    );
+    if (!takenNames.has(normalizedName)) return requestedName;
+
+    let suffix = 2;
+    while (takenNames.has(`${normalizedName}-${suffix}`)) suffix += 1;
+    return `${requestedName}-${suffix}`;
   }
 }

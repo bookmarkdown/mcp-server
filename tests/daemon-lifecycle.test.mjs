@@ -239,10 +239,11 @@ async function connectExtension(port) {
   socket.send(
     JSON.stringify({
       type: 'hello',
-      protocolVersion: '1',
+      protocolVersion: '2',
       token,
       appId: 'bmd-extension',
       instanceId,
+      displayName: 'otter-fox-panda',
       extensionId,
       browser: 'chrome',
       capabilities: { operations: ['browser.countOpenTabs'] },

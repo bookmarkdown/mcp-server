@@ -7,7 +7,7 @@ ms.topic: how-to
 
 ## 狀態與驗證範圍
 
-目前已由此 repository 原始碼與一般 Node.js WebSocket client 測試確認的是 server-side contract。真實 Chrome extension 互通性、extension 權限、Chrome Local Network Access，以及指定 MCP host 的整合尚未驗證。以下 JavaScript 僅示範 server 接受的訊息形狀，不代表已在 Chrome extension 中驗證。
+此 repository 的原始碼與一般 Node.js WebSocket client 測試確認 server-side contract。Companion extension 已實作 protocol v2 handshake、probe、browser RPC 與網路錯誤後的退避重連；其單元測試涵蓋 handshake、probe、browser operations 和設定，但沒有重連／退避專項測試。真實 Chrome extension 互通性、extension 權限、Chrome Local Network Access，以及指定 MCP host 的整合尚未驗證。以下 JavaScript 僅示範 server 接受的訊息形狀，不代表已在 Chrome 中完成整合驗證。
 
 ## 連線條件
 
@@ -27,21 +27,23 @@ daemon 從 `BOOKMARKDOWN_BRIDGE_TOKEN` 讀取 pairing token。瀏覽器 client �
 
 WebSocket 開啟後，client 必須在預設 5 秒內送出第一則文字 JSON `hello`。一般連線需包含以下欄位，schema 不接受額外欄位：
 
-* `type` 固定為 `hello`，`protocolVersion` 固定為 `1`。
+* `type` 固定為 `hello`，`protocolVersion` 固定為 `2`。
 * `appId` 固定為 `bmd-extension`，`browser` 固定為 `chrome`。
 * `instanceId` 是 UUID；同一個邏輯 instance 重連時應沿用此 ID。
+* `displayName` 可由使用者自訂為 1 至 32 個中英文、數字、空格或連字號，也可使用 extension 產生的三個動物詞 alias。Server 遇到重名時會加上數字後綴，並在成功 ack 回傳最終名稱。
 * `extensionId` 是 32 個小寫 `a` 至 `p` 字元，且必須等於 Origin 中的 ID。
 * `token` 是 daemon 設定的 pairing token。
 * `capabilities.operations` 列出 client 支援的操作。只列出 extension 已實作的 operation；browser tools 會依此欄位檢查能力。
 
-成功的 `hello-ack` 會提供 server 產生的 `connectionId`，連線隨後成為已註冊 instance：
+成功的 `hello-ack` 會提供 server 產生的 `connectionId` 和最終分配的 `displayName`，連線隨後成為已註冊 instance：
 
 ```json
 {
   "type": "hello-ack",
   "ok": true,
-  "protocolVersion": "1",
-  "connectionId": "<server-generated-uuid>"
+  "protocolVersion": "2",
+  "connectionId": "<server-generated-uuid>",
+  "displayName": "otter-fox-panda"
 }
 ```
 
@@ -51,7 +53,7 @@ WebSocket 開啟後，client 必須在預設 5 秒內送出第一則文字 JSON 
 {
   "type": "hello-ack",
   "ok": false,
-  "protocolVersion": "1",
+  "protocolVersion": "2",
   "reason": "unauthorized"
 }
 ```
@@ -61,7 +63,7 @@ server 目前使用的拒絕原因如下：
 * `hello-timeout`：未在期限內送出 hello。
 * `invalid-hello`：訊息為 binary、JSON 無效或不符合 schema。
 * `unauthorized`：pairing token 不符。
-* `unsupported-protocol-version`：協定版本不是 `1`。
+* `unsupported-protocol-version`：協定版本不是 `2`。
 * `unsupported-client`：`appId` 或 `browser` 不受支援。
 * `extension-id-mismatch`：hello 的 extension ID 與 Origin 不符。
 * `invalid-probe`：probe hello 宣告了非空的 operations。
@@ -72,7 +74,7 @@ server 目前使用的拒絕原因如下：
 
 ### Probe
 
-`mode: "probe"` 是選用的連線檢查，不是一般註冊所需。probe 必須通過相同的 token、版本與 client 驗證，且 `capabilities.operations` 必須是空陣列。成功 ack 為 `type: "hello-ack"`、`mode: "probe"`、`ok: true` 與 `protocolVersion: "1"`，不包含 `connectionId`；server 送出 ack 後以 close code `1000`、reason `probe-complete` 關閉連線，也不會註冊 instance。
+`mode: "probe"` 是選用的連線檢查，不是一般註冊所需。probe 必須通過相同的 token、版本與 client 驗證，且 `capabilities.operations` 必須是空陣列；probe 不需要 `displayName`。成功 ack 為 `type: "hello-ack"`、`mode: "probe"`、`ok: true` 與 `protocolVersion: "2"`，不包含 `connectionId`；server 送出 ack 後以 close code `1000`、reason `probe-complete` 關閉連線，也不會註冊 instance。
 
 ## Browser RPC operations
 
@@ -281,10 +283,11 @@ function connectExtension(pairingToken, instanceId, browserOperations) {
   socket.addEventListener("open", () => {
     socket.send(JSON.stringify({
       type: "hello",
-      protocolVersion: "1",
+      "protocolVersion": "2",
       token: pairingToken,
       appId: "bmd-extension",
       instanceId,
+      "displayName": "otter-fox-panda",
       extensionId: chrome.runtime.id,
       browser: "chrome",
       capabilities: { operations },
@@ -345,7 +348,7 @@ const instanceId = await getOrCreateStableInstanceId();
 const socket = connectExtension(pairingToken, instanceId, browserOperations);
 ```
 
-範例中的 `pairingToken` 由呼叫端安全提供。`getOrCreateStableInstanceId()` 是 extension 實作的示意 helper：為同一個邏輯 instance 建立並持久保存 UUID，重連或 service worker 重啟後沿用。具體儲存方式由 extension 決定，並須在目標環境驗證。此範例只涵蓋一次連線和 request/response，不包含重連策略。
+範例中的 `pairingToken` 由呼叫端安全提供。`getOrCreateStableInstanceId()` 是示意 helper；companion extension 目前會將 instance UUID 持久保存，並在重新連線時沿用。此範例只涵蓋一次連線和 request/response，不包含 extension 實際的重連流程，也不代表該流程已在 Chrome 中驗證。
 
 ## 逾時、關閉與限制
 
@@ -353,4 +356,4 @@ hello 預設須在 5 秒內送達；browser request 預設等待 5 秒，可用 
 
 socket 中斷會讓該連線上的 pending request 失敗，instance 在 daemon 的記憶體 registry 中標為 offline；daemon 重啟時 registry 清空。相同 `instanceId` 與 extension ID 再次註冊會取代舊連線，舊 socket 以 close code `4001`、reason `replaced` 關閉；相同 instance ID 搭配不同 extension ID 則遭拒。連線逾時或中斷後，server 不會替 client 重連。
 
-重連與退避是 browser client 後續工作，尚未在此 server 或 companion extension 中實作、測試或驗證。Chrome Local Network Access 與 extension 權限設定也需要在目標 Chrome 版本和 extension 中實際驗證；Node.js 測試不代表瀏覽器互通性已通過。
+Server 不會替 client 重連。Companion extension 已實作網路錯誤後重新連線，退避間隔最高為 30 秒，並在連線恢復後重新註冊 instance；目前沒有重連／退避專項自動化測試。Chrome Local Network Access 與 extension 權限設定仍需在目標 Chrome 版本和 extension 中實際驗證；Node.js 測試不代表瀏覽器互通性已通過。

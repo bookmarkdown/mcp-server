@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer';
 import * as z from 'zod/v4';
 import type { RawData } from 'ws';
 
-export const PROTOCOL_VERSION = '1' as const;
+export const PROTOCOL_VERSION = '2' as const;
 export const APP_ID = 'bmd-extension' as const;
 export const COUNT_OPEN_TABS_OPERATION = 'browser.countOpenTabs' as const;
 export const COUNT_OPEN_WINDOWS_OPERATION = 'browser.countOpenWindows' as const;
@@ -156,6 +156,7 @@ export const extensionHelloSchema = z
     token: z.string().min(1).max(512),
     appId: z.string().min(1).max(64),
     instanceId: z.string().uuid(),
+    displayName: z.string().min(1).max(64).regex(/^[\p{L}\p{N}]+(?:[ -][\p{L}\p{N}]+)*$/u).optional(),
     extensionId: z.string().regex(/^[a-p]{32}$/),
     browser: z.string().min(1).max(32),
     capabilities: z

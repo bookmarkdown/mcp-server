@@ -23,7 +23,7 @@ proxy 使用 MCP SDK v2 `serveStdio`。MCP 訊息只寫入 stdout，診斷訊息
 
 | 工具 | 輸入 | 行為 |
 | --- | --- | --- |
-| `devices.list` | `includeOffline`、`includeTabCounts`，預設皆為 `true` | 列出目前 daemon 已知的 instances，可查詢線上 instance 的分頁數。 |
+| `devices.list` | `includeOffline`、`includeTabCounts`，預設皆為 `true` | 列出目前 daemon 已知的 instances、各自的 UUID 與裝置別名，可查詢線上 instance 的分頁數。 |
 | `browser.countOpenTabs` | UUID `instanceId` | 計算指定 instance 一般視窗中的分頁數。 |
 | `browser.countOpenWindows` | UUID `instanceId` | 計算指定 instance 的一般視窗數。 |
 | `browser.listTabs` | UUID `instanceId`、`limit`（預設 10、上限 10）、`offset`（預設 0） | 分頁查詢，每頁最多回傳 10 筆 `tabId`、`windowId`、`active`、`title` 與 `url`。 |
@@ -37,7 +37,7 @@ proxy 使用 MCP SDK v2 `serveStdio`。MCP 訊息只寫入 stdout，診斷訊息
 
 ### `devices.list` 結果
 
-每個 instance 包含 `appId`、`instanceId`、`extensionId`、`browser`、`status`、`lastSeen`、回報的 operation capabilities 與 `displayName`。目前 `displayName` 為 `null`。
+每個 instance 包含 `appId`、`instanceId`、`extensionId`、`browser`、`status`、`lastSeen`、回報的 operation capabilities 與 `displayName`。使用者可在 extension 設定頁自訂 1 至 32 個中英文或數字組成的別名，詞語間可用空格或連字號；也可重新產生三個不同動物詞 alias。同一 daemon 中如有其他 instance 使用相同名稱，server 會加上 `-2`、`-3` 等數字後綴，並在註冊 ack 回傳最後分配的名稱。AI 可從 `devices.list` 將 `displayName` 對應到同一項目的 `instanceId`；執行 browser tools 時仍需使用 UUID `instanceId`。
 
 查詢分頁數時，每個 instance 都有 `countStatus` 與 nullable `tabCount`；成功結果包含 `countedAt`。`totalTabs` 僅加總成功的查詢，部分結果會以 `complete: false` 表示。未要求分頁數時，`totalTabs` 為 `null`。
 
@@ -47,7 +47,7 @@ instance registry 只存在 daemon 記憶體中，daemon 重啟後會清空。`i
 
 daemon 預設在 `127.0.0.1:38471` 接受 WebSocket 連線，可用 `BOOKMARKDOWN_WS_PORT` 指定 port。Origin 在兩種模式都必須符合 `chrome-extension://[a-p]{32}`；正式模式另外要求 ID 精確列於 `BOOKMARKDOWN_EXTENSION_IDS`，開發模式則接受任何符合格式的 ID。兩種模式都要求 hello token 正確，且 hello extension ID 必須等於 Origin ID。Origin 本身不是認證；token 不會經 IPC 傳送。listener 與 IPC 必須同時成功啟動，否則 daemon 會回復已建立的 listener。
 
-瀏覽器端連線、hello/ack、RPC 訊息與 client 範例見[瀏覽器整合指南](browser-integration.md)。Chrome extension、Local Network Access 與指定 MCP host 的互通性仍未驗證。
+瀏覽器端連線、hello/ack、RPC 訊息與 client 範例見[瀏覽器整合指南](browser-integration.md)。Companion extension 已實作 WebSocket client 與 browser RPC，相關單元測試已通過；真實 Chrome 整合、Local Network Access、extension 權限與指定 MCP host 的互通性仍未驗證。重連退避已有實作，但尚無專項自動化測試。
 
 IPC health 回覆包含 runtime mode，IPC protocol version 為 `3`。只有健康且模式相同的既有 daemon 才會被視為重複啟動；proxy 可連線至任一模式，不會以 runtime mode 篩選 daemon。
 
@@ -60,12 +60,12 @@ proxy 與 daemon 使用有版本的 Named Pipe IPC。每個 proxy session 維持
 | `DAEMON_VERSION_MISMATCH` | daemon 與 proxy 版本不相容，需手動重啟相同版本的 daemon。 |
 | `EXTENSION_NOT_CONNECTED` | 沒有可供該呼叫使用的已驗證 extension instance。 |
 
-WebSocket hello 要求 protocol version `1`、app ID `bmd-extension`、browser `chrome`、UUID instance ID，且 extension ID 必須符合 Origin；正式模式也必須符合 daemon allowlist。Browser RPC 僅接受 `browser.countOpenTabs`、`browser.countOpenWindows`、`browser.listTabs`、`browser.openTab`、`browser.closeTab` 與 `browser.moveTab`，並在呼叫前檢查 instance capabilities。request ID 用於將回覆配對到原始連線及呼叫。
+WebSocket hello 使用 protocol version `2`。一般註冊要求 app ID `bmd-extension`、browser `chrome`、UUID instance ID、合法裝置別名及與 Origin 相符的 extension ID；正式模式也必須符合 daemon allowlist。Probe 可省略別名且不會註冊 instance。Browser RPC 僅接受 `browser.countOpenTabs`、`browser.countOpenWindows`、`browser.listTabs`、`browser.openTab`、`browser.closeTab` 與 `browser.moveTab`，並在呼叫前檢查 instance capabilities。request ID 用於將回覆配對到原始連線及呼叫。
 
 ## 驗證狀態與後續工作
 
-測試使用一般 Node.js Named Pipe client、MCP stdio process 與 WebSocket client，涵蓋認證、路由、proxy-first 恢復、多 proxy 隔離及啟動 rollback。真實 Chrome/extension 整合、Chrome Local Network Access 與 extension 權限，以及指定 MCP host 的互通性尚未驗證。
+此 repository 的測試使用一般 Node.js Named Pipe client、MCP stdio process 與 WebSocket client，涵蓋認證、路由、proxy-first 恢復、多 proxy 隔離及啟動 rollback。Companion extension 的相關單元測試也已通過，涵蓋 handshake、probe、browser operations 和設定；重連退避未有專項測試。真實 Chrome/extension 整合、Chrome Local Network Access、extension 權限及指定 MCP host 的互通性尚未驗證。
 
-companion extension 的後續工作是：daemon 啟動或重啟後，以有上限的指數退避重新連線並重新註冊 instance。這項行為尚未在 extension 或本 repository 實作，也未經瀏覽器驗證。
+Companion extension 已實作 daemon 離線後以有上限的指數退避重新連線並重新註冊 instance；重連退避尚無專項自動化測試，且尚未在真實瀏覽器中驗證。
 
 設定範圍與本機啟動步驟見[專案 README](../README.md)。

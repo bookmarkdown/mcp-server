@@ -161,7 +161,7 @@ async function connectExtension(bridge, options = {}) {
   socket.send(
     JSON.stringify({
       type: 'hello',
-      protocolVersion: '1',
+          protocolVersion: '2',
       token,
       appId: 'bmd-extension',
       instanceId: options.instanceId ?? instanceId,
@@ -170,6 +170,7 @@ async function connectExtension(bridge, options = {}) {
       capabilities: {
         operations: options.operations ?? ['browser.countOpenTabs'],
       },
+      ...(options.mode ? {} : { displayName: options.displayName ?? 'otter-fox-panda' }),
       ...(options.mode ? { mode: options.mode } : {}),
       ...(options.token ? { token: options.token } : {}),
       ...(options.protocolVersion
@@ -247,10 +248,11 @@ test('routes a daemon tool call through the proposal-shaped WebSocket RPC', wind
     extension.send(
       JSON.stringify({
         type: 'hello',
-        protocolVersion: '1',
+            protocolVersion: '2',
         token,
         appId: 'bmd-extension',
         instanceId,
+            displayName: 'otter-fox-panda',
         extensionId,
         browser: 'chrome',
         capabilities: { operations: ['browser.countOpenTabs'] },
@@ -258,7 +260,7 @@ test('routes a daemon tool call through the proposal-shaped WebSocket RPC', wind
     );
     const acknowledgement = JSON.parse(await acknowledgementPromise);
     assert.equal(acknowledgement.ok, true);
-    assert.equal(acknowledgement.protocolVersion, '1');
+    assert.equal(acknowledgement.protocolVersion, '2');
 
     const call = bridge.client.call('browser.countOpenTabs', { instanceId });
     const request = JSON.parse(await nextMessage(extension));
@@ -404,7 +406,7 @@ test('rejects invalid pagination and mismatched tab-operation results', windowsO
   const listRequest = JSON.parse(await nextMessage(extension.socket));
   extension.socket.send(
     browserSuccessResponse(listRequest.requestId, {
-      tabs: [tab],
+          tabs: [tab, { ...tab, tabId: 13, active: false }],
       nextOffset: 5,
       queriedAt,
     }),
@@ -524,7 +526,7 @@ test('authenticates hello and keeps probe connections out of the instance regist
     type: 'hello-ack',
     mode: 'probe',
     ok: true,
-    protocolVersion: '1',
+    protocolVersion: '2',
   });
   await waitForClose(probe.socket);
   await assert.rejects(
@@ -644,7 +646,7 @@ test('aggregates live device counts using the proposal result shape', windowsOnl
   assert.equal(result.instances.length, 1);
   assert.equal(result.instances[0].instanceId, instanceId);
   assert.equal(result.instances[0].status, 'online');
-  assert.equal(result.instances[0].displayName, null);
+  assert.equal(result.instances[0].displayName, 'otter-fox-panda');
   assert.equal(result.instances[0].countStatus, 'ok');
   assert.equal(result.instances[0].tabCount, 4);
   assert.deepEqual(result.instances[0].capabilities.operations, [
@@ -652,6 +654,32 @@ test('aggregates live device counts using the proposal result shape', windowsOnl
   ]);
   assert.equal(result.totalTabs, 4);
   assert.equal(result.complete, true);
+});
+
+test('assigns unique device aliases and lists the assigned alias with each UUID', windowsOnly, async (t) => {
+  const bridge = await startDaemonForTest(t);
+  const first = await connectExtension(bridge, { displayName: '工作桌機 2' });
+  const second = await connectExtension(bridge, {
+    instanceId: secondInstanceId,
+    originExtensionId: secondExtensionId,
+    displayName: '工作桌機 2',
+  });
+  t.after(() => { first.socket.terminate(); second.socket.terminate(); });
+
+  assert.equal(first.acknowledgement.displayName, '工作桌機 2');
+  assert.equal(second.acknowledgement.displayName, '工作桌機 2-2');
+
+  const result = await bridge.client.call('devices.list', {
+    includeOffline: true,
+    includeTabCounts: false,
+  });
+  assert.deepEqual(
+    result.instances.map(({instanceId: id, displayName}) => ({instanceId: id, displayName})),
+    [
+      {instanceId, displayName: '工作桌機 2'},
+      {instanceId: secondInstanceId, displayName: '工作桌機 2-2'},
+    ],
+  );
 });
 
 test('bounds in-flight calls and settles pending requests on timeout or disconnect', windowsOnly, async (t) => {

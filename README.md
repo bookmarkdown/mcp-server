@@ -10,7 +10,7 @@ ms.topic: overview
 BookMarkdown MCP Server 使用兩個本機程序：你在終端啟動 foreground daemon；MCP host 啟動 stdio proxy。瀏覽器 extension 連線到 daemon 的 loopback WebSocket，proxy 則透過 Windows Named Pipe 將工具呼叫交給 daemon。
 
 > [!IMPORTANT]
-> 套件維持 `private`。此 repository 定義 server-side browser contract；companion extension、真實 Chrome 整合、Chrome Local Network Access 與指定 MCP host 的互通性尚未驗證。
+> 套件維持 `private`。Companion extension 已有 WebSocket client 與 browser RPC 實作，相關單元測試已通過；但真實 Chrome 整合、Chrome Local Network Access 與指定 MCP host 的互通性尚未驗證。Extension 的重連實作尚無專項自動化測試。
 
 ## 提供工具
 

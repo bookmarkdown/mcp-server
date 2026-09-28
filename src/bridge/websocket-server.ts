@@ -74,6 +74,7 @@ export class LoopbackWebSocketServer {
     return this.#boundPort;
   }
 
+  // 在本機 loopback 位址啟動 WebSocket 使用的 HTTP listener。
   public async listen(): Promise<number> {
     await new Promise<void>((resolve, reject) => {
       const onError = (error: Error) => reject(error);
@@ -93,6 +94,7 @@ export class LoopbackWebSocketServer {
     return address.port;
   }
 
+  // 中止 WebSocket 連線並關閉 HTTP 連線，避免 daemon 關閉時留下 listener。
   public async close(): Promise<void> {
     if (!this.#httpServer.listening) {
       return;
@@ -108,6 +110,7 @@ export class LoopbackWebSocketServer {
     });
   }
 
+  // 驗證 Origin 的 Chrome extension ID 格式；正式模式還必須在允許清單中。
   #extensionIdFromOrigin(origin: string | string[] | undefined): string | undefined {
     if (typeof origin !== 'string') {
       return undefined;
@@ -135,6 +138,7 @@ export class LoopbackWebSocketServer {
     );
   }
 
+  // 等待 extension hello，檢查訊息格式並限制握手等待時間。
   #handleConnection(socket: WebSocket, originExtensionId: string): void {
     socket.on('error', () => {});
     let finished = false;
@@ -181,6 +185,7 @@ export class LoopbackWebSocketServer {
     });
   }
 
+  // 驗證配對資訊、協定與 extension 身分；通過後才註冊連線或回覆 probe。
   #authenticate(
     socket: WebSocket,
     originExtensionId: string,
@@ -215,6 +220,11 @@ export class LoopbackWebSocketServer {
       return;
     }
 
+    if (hello.displayName === undefined) {
+      this.#rejectHello(socket, 'invalid-hello');
+      return;
+    }
+
     const registration = this.connections.register(socket, hello);
     if (!registration.ok) {
       this.#rejectHello(socket, registration.reason);
@@ -227,6 +237,7 @@ export class LoopbackWebSocketServer {
         ok: true,
         protocolVersion: PROTOCOL_VERSION,
         connectionId: registration.connectionId,
+        displayName: registration.displayName,
       }),
       (error) => {
         if (error) {
@@ -276,6 +287,7 @@ export class LoopbackWebSocketServer {
     );
   }
 
+  // 先檢查長度，再以固定時間比較 token，避免一般字串比較提早洩漏差異。
   #tokensMatch(provided: string, expected: string): boolean {
     const providedBytes = Buffer.from(provided, 'utf8');
     const expectedBytes = Buffer.from(expected, 'utf8');
