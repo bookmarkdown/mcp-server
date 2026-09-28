@@ -18,7 +18,10 @@ export async function runCli(
     }
 
     if (mode === 'daemon') {
-      const result = await startDaemon({ runtimeMode });
+      const result = await startDaemon({
+        runtimeMode,
+        pipeName: process.env.BOOKMARKDOWN_IPC_PIPE_NAME,
+      });
       if (result.status === 'already_running') {
         console.error('BookMarkdown daemon is already running.');
         return;
@@ -30,7 +33,7 @@ export async function runCli(
       return;
     }
 
-    startProxyService();
+    startProxyService({ pipeName: process.env.BOOKMARKDOWN_IPC_PIPE_NAME });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown startup error.';
     console.error(`BookMarkdown MCP server failed to start: ${message}`);

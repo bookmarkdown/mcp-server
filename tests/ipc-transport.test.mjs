@@ -168,3 +168,23 @@ test(
     await assert.rejects(connectLocalPipe(pipeName));
   },
 );
+
+test('cancels a pending pipe connection and releases its socket', windowsOnly, async (t) => {
+  const sockets = new Set();
+  const { pipeName, server } = await startServer(t, (socket) => {
+    sockets.add(socket);
+    socket.once('close', () => sockets.delete(socket));
+  });
+  const controller = new AbortController();
+  const connecting = connectLocalPipe(pipeName, { signal: controller.signal, timeoutMs: 250 });
+  controller.abort();
+  await assert.rejects(connecting, { name: 'AbortError' });
+  await server.close();
+  assert.equal(sockets.size, 0);
+  await assert.rejects(connectLocalPipe(pipeName));
+});
+
+test('rejects unbounded connection deadlines before creating a socket', windowsOnly, async () => {
+  await assert.rejects(connectLocalPipe(uniquePipeName(), { timeoutMs: 0 }), RangeError);
+  await assert.rejects(connectLocalPipe(uniquePipeName(), { timeoutMs: 30001 }), RangeError);
+});

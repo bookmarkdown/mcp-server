@@ -102,8 +102,9 @@ export class LoopbackWebSocketServer {
       client.terminate();
     }
 
-    await new Promise<void>((resolve) => {
-      this.#httpServer.close(() => resolve());
+    await new Promise<void>((resolve, reject) => {
+      this.#httpServer.close((error) => error ? reject(error) : resolve());
+      this.#httpServer.closeAllConnections();
     });
   }
 

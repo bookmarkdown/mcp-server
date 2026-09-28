@@ -559,6 +559,77 @@ test('matches out-of-order responses to the originating extension instance', win
   assert.equal((await secondResult).count, 9);
 });
 
+test('ignores a valid response ID sent from the wrong extension socket', windowsOnly, async (t) => {
+  const bridge = await startDaemonForTest(t);
+  const first = await connectExtension(bridge, { instanceId });
+  const second = await connectExtension(bridge, {
+    instanceId: secondInstanceId,
+    originExtensionId: secondExtensionId,
+  });
+  t.after(() => { first.socket.terminate(); second.socket.terminate(); });
+  const pending = bridge.client.call('browser.countOpenTabs', { instanceId });
+  const request = JSON.parse(await nextMessage(first.socket));
+  second.socket.send(countResponse(request.requestId, 99));
+  const other = bridge.client.call('browser.countOpenTabs', { instanceId: secondInstanceId });
+  const otherRequest = JSON.parse(await nextMessage(second.socket));
+  second.socket.send(countResponse(otherRequest.requestId, 2));
+  assert.equal((await other).count, 2);
+  let timer;
+  try {
+    assert.equal(await Promise.race([
+      pending.then(() => 'settled'),
+      new Promise((resolve) => { timer = setTimeout(() => resolve('pending'), 50); }),
+    ]), 'pending');
+  } finally {
+    clearTimeout(timer);
+  }
+  first.socket.send(countResponse(request.requestId, 3));
+  assert.equal((await pending).count, 3);
+});
+
+test('never replays open, close, or move after timeout, cancellation, or late replies', windowsOnly, async (t) => {
+  const bridge = await startDaemonForTest(t, { requestTimeoutMs: 100 });
+  const operations = ['browser.openTab', 'browser.closeTab', 'browser.moveTab'];
+  const extension = await connectExtension(bridge, { instanceId, operations });
+  t.after(() => extension.socket.terminate());
+  const frames = [];
+  extension.socket.on('message', (data) => {
+    const frame = JSON.parse(data.toString('utf8'));
+    if (frame.type === 'browser/request') frames.push(frame);
+  });
+  const cases = [
+    { name: 'browser.openTab', args: { instanceId, url: 'https://example.invalid/private' }, result: { tabId: 12, windowId: 7, url: 'https://example.invalid/private' } },
+    { name: 'browser.closeTab', args: { instanceId, tabId: 12 }, result: { tabId: 12, closed: true } },
+    { name: 'browser.moveTab', args: { instanceId, tabId: 12, targetWindowId: 9 }, result: { tabId: 12, sourceWindowId: 7, targetWindowId: 9 } },
+  ];
+
+  for (const operation of cases) {
+    const before = frames.length;
+    const timed = bridge.client.call(operation.name, operation.args);
+    const timeoutAssertion = assert.rejects(timed, { code: 'REQUEST_TIMEOUT' });
+    const timedFrame = JSON.parse(await nextMessage(extension.socket));
+    assert.equal(timedFrame.operation, operation.name);
+    await timeoutAssertion;
+    extension.socket.send(browserSuccessResponse(timedFrame.requestId, operation.result));
+
+    const controller = new AbortController();
+    const cancelled = bridge.client.call(operation.name, operation.args, controller.signal);
+    const cancelAssertion = assert.rejects(cancelled, { code: 'REQUEST_CANCELLED' });
+    const cancelledFrame = JSON.parse(await nextMessage(extension.socket));
+    controller.abort();
+    await cancelAssertion;
+    extension.socket.send(browserSuccessResponse(cancelledFrame.requestId, operation.result));
+
+    const recovered = bridge.client.call(operation.name, operation.args);
+    const recoveryFrame = JSON.parse(await nextMessage(extension.socket));
+    assert.notEqual(recoveryFrame.requestId, timedFrame.requestId);
+    assert.notEqual(recoveryFrame.requestId, cancelledFrame.requestId);
+    extension.socket.send(browserSuccessResponse(recoveryFrame.requestId, operation.result));
+    assert.deepEqual(await recovered, operation.result);
+    assert.equal(frames.length - before, 3);
+  }
+});
+
 test('aggregates live device counts using the proposal result shape', windowsOnly, async (t) => {
   const bridge = await startDaemonForTest(t);
   const extension = await connectExtension(bridge, { instanceId });

@@ -50,6 +50,10 @@ export function parseBridgeConfig(
   env: NodeJS.ProcessEnv,
   runtimeMode: RuntimeMode = 'production',
 ): BridgeConfigResult {
+  if (runtimeMode !== 'production' && runtimeMode !== 'development') {
+    return { ok: false, reason: 'Runtime mode must be production or development.' };
+  }
+
   const token = env.BOOKMARKDOWN_BRIDGE_TOKEN;
   if (token === undefined || token.length === 0) {
     return {

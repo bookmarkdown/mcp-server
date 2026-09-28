@@ -109,6 +109,8 @@ export class IpcClient {
   #closed = false;
   #connection: IpcConnection | undefined;
   #connectionPromise: Promise<IpcConnection> | undefined;
+  #connectionAbortController: AbortController | undefined;
+  #connectionWaiters = 0;
 
   public readonly executor: ToolExecutor = {
     [toolCatalog.devicesList.name]: (args, { signal }) =>
@@ -215,6 +217,7 @@ export class IpcClient {
     }
 
     this.#closed = true;
+    this.#connectionAbortController?.abort();
     this.#connection?.close(new IpcClientError('REQUEST_CANCELLED'));
     this.#connection = undefined;
   }
@@ -229,7 +232,7 @@ export class IpcClient {
 
       let connection: IpcConnection | undefined;
       try {
-        connection = await this.#getConnection();
+        connection = await this.#getConnection(signal);
         const health = await connection.health(
           this.#requestTimeoutMs,
           signal,
@@ -237,7 +240,9 @@ export class IpcClient {
         this.#validateHealth(health);
         return connection;
       } catch (error) {
-        const clientError = asIpcClientError(error, 'DAEMON_UNAVAILABLE');
+        const clientError = signal?.aborted
+          ? new IpcClientError('REQUEST_CANCELLED')
+          : asIpcClientError(error, 'DAEMON_UNAVAILABLE');
         if (
           clientError.code === 'DAEMON_VERSION_MISMATCH' ||
           clientError.code === 'EXTENSION_NOT_CONNECTED' ||
@@ -270,33 +275,48 @@ export class IpcClient {
     );
   }
 
-  async #getConnection(): Promise<IpcConnection> {
+  async #getConnection(signal?: AbortSignal): Promise<IpcConnection> {
     if (this.#closed) {
       throw new IpcClientError('DAEMON_UNAVAILABLE');
     }
     if (this.#connection?.isOpen) {
       return this.#connection;
     }
-    if (this.#connectionPromise) {
-      return this.#connectionPromise;
+    if (!this.#connectionPromise) {
+      const controller = new AbortController();
+      this.#connectionAbortController = controller;
+      this.#connectionPromise = this.#openConnection(controller.signal).finally(() => {
+        if (this.#connectionAbortController === controller) {
+          this.#connectionPromise = undefined;
+          this.#connectionAbortController = undefined;
+        }
+      });
     }
 
-    const connectionPromise = this.#openConnection();
-    this.#connectionPromise = connectionPromise;
+    const connectionPromise = this.#connectionPromise;
+    this.#connectionWaiters += 1;
     try {
-      return await connectionPromise;
+      const connection = await waitForConnection(connectionPromise, signal);
+      if (signal?.aborted) {
+        throw new IpcClientError('REQUEST_CANCELLED');
+      }
+      return connection;
     } finally {
-      if (this.#connectionPromise === connectionPromise) {
-        this.#connectionPromise = undefined;
+      this.#connectionWaiters -= 1;
+      if (this.#connectionWaiters === 0 && this.#connectionPromise === connectionPromise) {
+        this.#connectionAbortController?.abort();
       }
     }
   }
 
-  async #openConnection(): Promise<IpcConnection> {
+  async #openConnection(signal: AbortSignal): Promise<IpcConnection> {
     let connection: IpcConnection | undefined;
     try {
-      const socket = await connectLocalPipe(this.#pipeName);
-      if (this.#closed) {
+      const socket = await connectLocalPipe(this.#pipeName, {
+        timeoutMs: Math.min(this.#requestTimeoutMs, this.#handshakeTimeoutMs),
+        signal,
+      });
+      if (this.#closed || signal.aborted) {
         socket.destroy();
         throw new IpcClientError('DAEMON_UNAVAILABLE');
       }
@@ -311,9 +331,9 @@ export class IpcClient {
         },
       );
       this.#connection = connection;
-      const hello = await connection.hello(
-        this.#packageVersion,
-        this.#handshakeTimeoutMs,
+      const hello = await waitForConnection(
+        connection.hello(this.#packageVersion, this.#handshakeTimeoutMs),
+        signal,
       );
       this.#validateHello(hello);
       return connection;
@@ -704,6 +724,25 @@ function boundedInteger(
     throw new RangeError(`${name} must be an integer between ${minimum} and ${maximum}.`);
   }
   return value;
+}
+
+function waitForConnection<Result>(
+  promise: Promise<Result>,
+  signal?: AbortSignal,
+): Promise<Result> {
+  if (!signal) {
+    return promise;
+  }
+  if (signal.aborted) {
+    return Promise.reject(new IpcClientError('REQUEST_CANCELLED'));
+  }
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(new IpcClientError('REQUEST_CANCELLED'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(resolve, reject).finally(() => {
+      signal.removeEventListener('abort', onAbort);
+    });
+  });
 }
 
 async function delay(milliseconds: number, signal?: AbortSignal): Promise<void> {

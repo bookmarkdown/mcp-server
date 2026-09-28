@@ -96,7 +96,7 @@ export class DaemonService {
   ): Promise<DaemonStartResult> {
     const configResult = parseBridgeConfig(
       options.env ?? process.env,
-      options.runtimeMode ?? 'production',
+      options.runtimeMode === undefined ? 'production' : options.runtimeMode,
     );
     if (!configResult.ok) {
       throw new Error(configResult.reason);
@@ -641,23 +641,30 @@ async function probeExistingDaemon(
 ): Promise<boolean> {
   let socket: Socket;
   try {
-    socket = await connectLocalPipe(pipeName);
-  } catch {
-    return false;
+    socket = await connectLocalPipe(pipeName, { timeoutMs: config.helloTimeoutMs });
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw error;
+    }
+    if (error instanceof Error && 'code' in error &&
+      (error.code === 'ENOENT' || error.code === 'ECONNREFUSED')) {
+      return false;
+    }
+    throw new Error('Unable to establish a bounded connection to the local daemon.');
   }
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const decoder = new IpcFrameDecoder(config.maxPayloadBytes);
     const healthRequestId = randomUUID();
     let phase: 'hello' | 'health' = 'hello';
     let settled = false;
     const timer = setTimeout(
-      () => finish(false),
+      () => finish(false, true),
       config.helloTimeoutMs * 2,
     );
     timer.unref();
 
-    const finish = (healthy: boolean) => {
+    const finish = (healthy: boolean, timedOut = false) => {
       if (settled) {
         return;
       }
@@ -667,7 +674,11 @@ async function probeExistingDaemon(
       socket.off('error', onError);
       socket.off('close', onClose);
       socket.destroy();
-      resolve(healthy);
+      if (timedOut) {
+        reject(new Error('Local daemon health probe timed out.'));
+      } else {
+        resolve(healthy);
+      }
     };
     const onError = () => finish(false);
     const onClose = () => finish(false);

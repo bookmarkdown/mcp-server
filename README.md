@@ -94,6 +94,8 @@ npm start -- daemon
 
 MCP host 只啟動 proxy；proxy 不會啟動 daemon，也不需要 WebSocket token。daemon 尚未啟動時，proxy 仍可完成 MCP initialize 與 `tools/list`，工具呼叫會回報 `DAEMON_UNAVAILABLE`。
 
+私人本機實驗或測試需要使用另一個 Named Pipe 時，可在啟動 daemon 的環境與 MCP host 啟動 proxy 的環境中，將 `BOOKMARKDOWN_IPC_PIPE_NAME` 設為相同名稱。未設定時兩端都使用 `bookmarkdown-mcp`。此設定不會變更已在執行的 daemon。
+
 ## Configuration
 
 以下環境變數由 daemon 使用：
@@ -110,7 +112,7 @@ MCP host 只啟動 proxy；proxy 不會啟動 daemon，也不需要 WebSocket to
 | `BOOKMARKDOWN_REQUEST_TIMEOUT_MS` | `5000` | `100` 至 `60000` |
 | `BOOKMARKDOWN_HELLO_TIMEOUT_MS` | `5000` | `250` 至 `30000` |
 
-WebSocket 固定綁定 `127.0.0.1`。設定無效或 listener 無法啟動時，daemon 會回復已開啟的資源並以非零狀態結束，不會改用其他 port。proxy 與 daemon 使用 Windows Named Pipe `\\.\pipe\bookmarkdown-mcp` 通訊。
+WebSocket 固定綁定 `127.0.0.1`。設定無效或 listener 無法啟動時，daemon 會回復已開啟的資源並以非零狀態結束，不會改用其他 port。proxy 與 daemon 預設使用 Windows Named Pipe `\\.\pipe\bookmarkdown-mcp` 通訊。選用的 `BOOKMARKDOWN_IPC_PIPE_NAME` 只接受以英數字開頭、長度最多 128 字元的名稱，其餘字元可為英數字、句點、底線或連字號。
 
 ## Development
 

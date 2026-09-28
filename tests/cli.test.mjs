@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
-import { createServer as createNetServer } from 'node:net';
+import { createConnection, createServer as createNetServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const cliPath = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
+const builtCliPath = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
 const devCliPath = fileURLToPath(new URL('../src/dev.ts', import.meta.url));
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const cliToken = '0123456789abcdef0123456789abcdef';
@@ -47,10 +49,10 @@ class McpProxyProcess {
   stdout = '';
   stderr = '';
 
-  constructor() {
+  constructor(env = {}) {
     this.#child = spawn(process.execPath, ['--import', 'tsx', cliPath, 'proxy'], {
       cwd: projectRoot,
-      env: process.env,
+      env: { ...process.env, ...env },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     this.#child.stdout.on('data', (chunk) => this.#onStdout(chunk));
@@ -231,7 +233,9 @@ test('keeps package defaults in production and routes the dev entrypoint explici
 });
 
 test('dispatches proxy mode without a daemon and keeps MCP on stdout', async (t) => {
-  const proxy = new McpProxyProcess();
+  const proxy = new McpProxyProcess({
+    BOOKMARKDOWN_IPC_PIPE_NAME: `bookmarkdown-cli-${process.pid}-${randomUUID()}`,
+  });
   t.after(() => proxy.close());
 
   const initialized = await proxy.initialize();
@@ -262,4 +266,80 @@ test('dispatches proxy mode without a daemon and keeps MCP on stdout', async (t)
   for (const line of proxy.stdout.split('\n').filter(Boolean)) {
     assert.equal(JSON.parse(line).jsonrpc, '2.0');
   }
+});
+
+test('starts the built daemon CLI and releases its listeners on shutdown', { skip: process.platform !== 'win32' }, async (t) => {
+  const reserved = createNetServer();
+  await new Promise((resolve, reject) => {
+    reserved.once('error', reject);
+    reserved.listen(0, '127.0.0.1', resolve);
+  });
+  const address = reserved.address();
+  assert.ok(address && typeof address !== 'string');
+  await new Promise((resolve) => reserved.close(resolve));
+
+  const pipeName = `bookmarkdown-cli-${process.pid}-${randomUUID()}`;
+  const child = spawn(process.execPath, [builtCliPath, 'daemon'], {
+    cwd: projectRoot,
+    env: {
+      ...process.env,
+      BOOKMARKDOWN_BRIDGE_TOKEN: cliToken,
+      BOOKMARKDOWN_EXTENSION_IDS: 'a'.repeat(32),
+      BOOKMARKDOWN_WS_PORT: String(address.port),
+      BOOKMARKDOWN_IPC_PIPE_NAME: pipeName,
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', (chunk) => { stdout += chunk.toString('utf8'); });
+  const exited = new Promise((resolve) => child.once('close', (code, signal) => resolve({ code, signal })));
+  t.after(async () => {
+    if (child.exitCode === null && child.signalCode === null) child.kill();
+    await exited;
+  });
+  let readyTimer;
+  try {
+    await Promise.race([
+      new Promise((resolve, reject) => {
+        child.stderr.on('data', (chunk) => {
+          stderr += chunk.toString('utf8');
+          if (/BookMarkdown daemon listening/.test(stderr)) resolve();
+        });
+        child.once('close', () => reject(new Error(`Daemon exited before readiness: ${stderr}`)));
+      }),
+      new Promise((_, reject) => {
+        readyTimer = setTimeout(() => reject(new Error(`Daemon startup timed out: ${stderr}`)), 5000);
+      }),
+    ]);
+  } finally {
+    clearTimeout(readyTimer);
+  }
+  assert.equal(stdout, '');
+  assert.equal(stderr.includes(cliToken), false);
+  assert.match(stderr, new RegExp(pipeName));
+  assert.equal(child.kill('SIGINT'), true);
+  let exitTimer;
+  try {
+    const exit = await Promise.race([
+      exited,
+      new Promise((_, reject) => {
+        exitTimer = setTimeout(() => reject(new Error('Daemon shutdown timed out.')), 5000);
+      }),
+    ]);
+    assert.ok(exit.code === 0 || exit.signal === 'SIGINT');
+  } finally {
+    clearTimeout(exitTimer);
+  }
+  const rebound = createNetServer();
+  await new Promise((resolve, reject) => {
+    rebound.once('error', reject);
+    rebound.listen(address.port, '127.0.0.1', resolve);
+  });
+  await new Promise((resolve) => rebound.close(resolve));
+  await assert.rejects(new Promise((resolve, reject) => {
+    const socket = createConnection(`\\\\.\\pipe\\${pipeName}`);
+    socket.once('connect', () => { socket.destroy(); resolve(); });
+    socket.once('error', reject);
+  }));
 });

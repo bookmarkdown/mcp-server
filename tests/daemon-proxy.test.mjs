@@ -227,6 +227,10 @@ class McpProxyProcess {
   }
 
   request(method, params) {
+    return this.beginRequest(method, params).response;
+  }
+
+  beginRequest(method, params) {
     const id = this.#nextId++;
     const response = new Promise((resolve, reject) => {
       const pending = {
@@ -254,12 +258,12 @@ class McpProxyProcess {
         }
       },
     );
-    return response.then((message) => {
+    return { id, response: response.then((message) => {
       if (message.error) {
         throw new Error(message.error.message ?? 'MCP request failed.');
       }
       return message.result;
-    });
+    }) };
   }
 
   notify(method, params) {
@@ -554,3 +558,49 @@ test(
     await assertPortCanBeRebound(port);
   },
 );
+
+test('isolates cross-proxy cancellation and extension errors in the running daemon', windowsOnly, async (t) => {
+  const pipeName = uniquePipeName();
+  const port = await reservePort();
+  const daemon = startDaemonProcess(pipeName, makeDaemonEnvironment(port));
+  t.after(() => daemon.stop());
+  await daemon.waitForStderr(/DAEMON_READY/);
+  const firstExtension = await connectExtension(port, extensionId, firstInstanceId);
+  const secondExtension = await connectExtension(port, secondExtensionId, secondInstanceId);
+  t.after(() => { firstExtension.terminate(); secondExtension.terminate(); });
+  const first = startProxyProcess(pipeName);
+  const second = startProxyProcess(pipeName);
+  t.after(async () => Promise.all([first.close(), second.close()]));
+  await Promise.all([first.initialize(), second.initialize()]);
+
+  const cancelled = first.beginRequest('tools/call', {
+    name: 'browser.countOpenTabs', arguments: { instanceId: firstInstanceId },
+  });
+  cancelled.response.catch(() => {});
+  const firstFrame = await nextWebSocketMessage(firstExtension);
+  const rejected = second.request('tools/call', {
+    name: 'browser.countOpenTabs', arguments: { instanceId: secondInstanceId },
+  });
+  const secondFrame = await nextWebSocketMessage(secondExtension);
+  first.notify('notifications/cancelled', { requestId: cancelled.id, reason: 'test cancellation' });
+  secondExtension.send(JSON.stringify({
+    type: 'browser/response', requestId: secondFrame.requestId, ok: false,
+    error: { name: 'TestError', message: 'redacted', code: 'TEST_ERROR' },
+  }));
+  assertToolError(await rejected, 'EXTENSION_OPERATION_FAILED');
+  firstExtension.send(JSON.stringify(countResponse(firstFrame.requestId, 99)));
+
+  const recovered = second.request('tools/call', {
+    name: 'browser.countOpenTabs', arguments: { instanceId: secondInstanceId },
+  });
+  const recoveryFrame = await nextWebSocketMessage(secondExtension);
+  secondExtension.send(JSON.stringify(countResponse(recoveryFrame.requestId, 4)));
+  assert.equal(readToolValue(await recovered).count, 4);
+  first.assertProtocolOnlyStdout();
+  second.assertProtocolOnlyStdout();
+  assert.equal(daemon.stdout, '');
+  for (const diagnostic of [daemon.stderr, first.stderr, second.stderr]) {
+    assert.equal(diagnostic.includes(token), false);
+    assert.equal(diagnostic.includes('redacted'), false);
+  }
+});

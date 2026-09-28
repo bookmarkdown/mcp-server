@@ -86,23 +86,54 @@ export async function listenLocalPipe(
   };
 }
 
-export async function connectLocalPipe(pipeName: string): Promise<Socket> {
+export interface LocalPipeConnectOptions {
+  timeoutMs?: number;
+  signal?: AbortSignal;
+}
+
+export async function connectLocalPipe(
+  pipeName: string,
+  options: LocalPipeConnectOptions = {},
+): Promise<Socket> {
   assertWindows();
+  const timeoutMs = options.timeoutMs ?? 5000;
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30000) {
+    throw new RangeError('Named Pipe connect timeout must be between 1 and 30000 milliseconds.');
+  }
+  if (options.signal?.aborted) {
+    throw new DOMException('Named Pipe connect cancelled.', 'AbortError');
+  }
 
   const socket = createConnection(getLocalPipePath(pipeName));
   return new Promise<Socket>((resolve, reject) => {
-    const handleConnect = () => {
+    const cleanup = () => {
+      clearTimeout(timer);
+      options.signal?.removeEventListener('abort', handleAbort);
+      socket.off('connect', handleConnect);
       socket.off('error', handleError);
+    };
+    const handleConnect = () => {
+      cleanup();
       resolve(socket);
     };
     const handleError = (error: Error) => {
-      socket.off('connect', handleConnect);
+      cleanup();
       socket.destroy();
       reject(error);
     };
+    const handleAbort = () => handleError(
+      new DOMException('Named Pipe connect cancelled.', 'AbortError'),
+    );
+    const timer = setTimeout(() => handleError(
+      new Error('Named Pipe connect timed out.'),
+    ), timeoutMs);
 
     socket.once('connect', handleConnect);
     socket.once('error', handleError);
+    options.signal?.addEventListener('abort', handleAbort, { once: true });
+    if (options.signal?.aborted) {
+      handleAbort();
+    }
   });
 }
 

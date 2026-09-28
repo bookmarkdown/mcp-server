@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { IpcClient } from '../dist/ipc/client.js';
 import { IPC_PROTOCOL_VERSION } from '../dist/ipc/protocol.js';
 
 const packageMetadata = createRequire(import.meta.url)('../package.json');
@@ -71,10 +72,12 @@ async function startFakeDaemon(t, pipeName, options = {}) {
   const cancellations = [];
   const callEvents = new EventQueue();
   const cancellationEvents = new EventQueue();
+  const connectionEvents = new EventQueue();
   let closePromise;
 
   const server = createServer((socket) => {
     sockets.add(socket);
+    connectionEvents.push(socket);
     socket.once('close', () => sockets.delete(socket));
     socket.on('error', () => {});
 
@@ -109,6 +112,9 @@ async function startFakeDaemon(t, pipeName, options = {}) {
 
   function handleRequest(socket, request) {
     if (request.type === 'hello') {
+      if (options.ignoreHello?.()) {
+        return;
+      }
       const protocolVersion = options.protocolVersion ?? IPC_PROTOCOL_VERSION;
       const packageVersion = options.packageVersion ?? localPackageVersion;
       const status =
@@ -194,6 +200,7 @@ async function startFakeDaemon(t, pipeName, options = {}) {
     cancellations,
     nextCall: () => callEvents.next(),
     nextCancellation: () => cancellationEvents.next(),
+    nextConnection: () => connectionEvents.next(),
     close() {
       closePromise ??= new Promise((resolve, reject) => {
         for (const socket of sockets) {
@@ -249,8 +256,8 @@ function defaultResult(request) {
   };
 }
 
-function startProxyClient(pipeName) {
-  const bootstrap = `import { startProxyService } from ${JSON.stringify(proxyServiceUrl)}; startProxyService({ pipeName: ${JSON.stringify(pipeName)} });`;
+function startProxyClient(pipeName, options = {}) {
+  const bootstrap = `import { startProxyService } from ${JSON.stringify(proxyServiceUrl)}; startProxyService(${JSON.stringify({ pipeName, ...options })});`;
   return new McpStdioClient(bootstrap);
 }
 
@@ -636,6 +643,16 @@ test(
     });
     await daemon.nextCancellation();
     assert.equal(dispatched.request.type, 'call');
+    let timer;
+    try {
+      const outcome = await Promise.race([
+        pending.response.then(() => 'response'),
+        new Promise((resolve) => { timer = setTimeout(() => resolve('suppressed'), 150); }),
+      ]);
+      assert.equal(outcome, 'suppressed');
+    } finally {
+      clearTimeout(timer);
+    }
     const next = await client.request('tools/call', {
       name: 'browser.countOpenTabs',
       arguments: { instanceId: '00000000-0000-4000-8000-000000000002' },
@@ -644,6 +661,60 @@ test(
     assert.equal(daemon.calls.length, 2);
   },
 );
+
+test('times out a dispatched call, ignores its late reply, and serves a later call', windowsOnly, async (t) => {
+  const pipeName = uniquePipeName();
+  const daemon = await startFakeDaemon(t, pipeName, {
+    onCall(call) {
+      if (daemon.calls.length > 1) call.respond(defaultResult(call.request));
+    },
+  });
+  const client = startProxyClient(pipeName, { requestTimeoutMs: 100, connectionAttempts: 1 });
+  t.after(() => client.close());
+  await client.initialize();
+
+  const first = startCountCall(client, '00000000-0000-4000-8000-000000000001');
+  const dispatched = await daemon.nextCall();
+  assertToolError(await first.response, 'REQUEST_TIMEOUT');
+  dispatched.respond({ count: 99, countedAt: new Date().toISOString() });
+  const recovered = await client.request('tools/call', {
+    name: 'browser.countOpenTabs',
+    arguments: { instanceId: '00000000-0000-4000-8000-000000000002' },
+  });
+  assert.equal(readToolValue(recovered).count, 2);
+  assert.equal(daemon.calls.length, 2);
+  client.assertProtocolOnlyStdout();
+});
+
+test('keeps errors and cancellations isolated across proxy sessions', windowsOnly, async (t) => {
+  const pipeName = uniquePipeName();
+  const daemon = await startFakeDaemon(t, pipeName, { onCall() {} });
+  const first = startProxyClient(pipeName);
+  const second = startProxyClient(pipeName);
+  t.after(async () => Promise.all([first.close(), second.close()]));
+  await Promise.all([first.initialize(), second.initialize()]);
+
+  const cancelled = startCountCall(first, '00000000-0000-4000-8000-000000000001');
+  const firstCall = await daemon.nextCall();
+  const rejected = startCountCall(second, '00000000-0000-4000-8000-000000000002');
+  const secondCall = await daemon.nextCall();
+  assert.notEqual(firstCall.socket, secondCall.socket);
+  secondCall.reject('EXTENSION_OPERATION_FAILED');
+  assertToolError(await rejected.response, 'EXTENSION_OPERATION_FAILED');
+  first.notify('notifications/cancelled', { requestId: cancelled.id, reason: 'test cancellation' });
+  const cancellation = await daemon.nextCancellation();
+  assert.equal(cancellation.socket, firstCall.socket);
+  assert.equal(cancellation.request.requestId, firstCall.request.requestId);
+  firstCall.reject('REQUEST_CANCELLED');
+
+  const later = startCountCall(second, '00000000-0000-4000-8000-000000000003');
+  const laterCall = await daemon.nextCall();
+  laterCall.respond(defaultResult(laterCall.request));
+  assert.equal(readToolValue(await later.response).count, 3);
+  assert.equal(daemon.calls.length, 3);
+  first.assertProtocolOnlyStdout();
+  second.assertProtocolOnlyStdout();
+});
 
 test(
   'does not replay a side-effecting call after dispatch disconnect',
@@ -682,6 +753,8 @@ test(
     });
     assert.equal(readToolValue(later).url, 'https://example.invalid/next');
     assert.equal(daemon.calls.length, 2);
+    assert.equal(client.stderr.includes('example.invalid'), false);
+    client.assertProtocolOnlyStdout();
   },
 );
 
@@ -752,3 +825,50 @@ test(
     assert.equal(daemon.calls.length, 2);
   },
 );
+
+test('bounds an unresponsive pre-hello daemon and recovers without dispatching the first call', windowsOnly, async (t) => {
+  const pipeName = uniquePipeName();
+  let stalled = true;
+  const daemon = await startFakeDaemon(t, pipeName, { ignoreHello: () => stalled });
+  const client = startProxyClient(pipeName, {
+    handshakeTimeoutMs: 250,
+    requestTimeoutMs: 250,
+    connectionAttempts: 1,
+  });
+  t.after(() => client.close());
+  await client.initialize();
+
+  const startedAt = Date.now();
+  const pending = client.request('tools/call', { name: 'devices.list', arguments: {} });
+  const socket = await daemon.nextConnection();
+  assertToolError(await pending, 'DAEMON_UNAVAILABLE');
+  assert.ok(Date.now() - startedAt < 1500);
+  assert.equal(socket.destroyed, true);
+  assert.equal(daemon.calls.length, 0);
+
+  stalled = false;
+  const recovered = await client.request('tools/call', { name: 'devices.list', arguments: {} });
+  assert.deepEqual(readToolValue(recovered).instances, []);
+  assert.equal(daemon.calls.length, 1);
+});
+
+test('cancels a pre-hello proxy call and closes the establishing socket', windowsOnly, async (t) => {
+  const pipeName = uniquePipeName();
+  const daemon = await startFakeDaemon(t, pipeName, { ignoreHello: () => true });
+  const client = new IpcClient({
+    pipeName,
+    handshakeTimeoutMs: 1000,
+    connectionAttempts: 1,
+  });
+  t.after(() => client.close());
+
+  const controller = new AbortController();
+  const pending = client.call('devices.list', { includeOffline: false, includeTabCounts: false }, controller.signal);
+  const socket = await daemon.nextConnection();
+  const closed = new Promise((resolve) => socket.once('close', resolve));
+  controller.abort();
+  await assert.rejects(pending, { code: 'REQUEST_CANCELLED' });
+  await closed;
+  assert.equal(socket.destroyed, true);
+  assert.equal(daemon.calls.length, 0);
+});

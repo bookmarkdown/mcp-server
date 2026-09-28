@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
-import { createServer as createNetServer } from 'node:net';
+import { createConnection, createServer as createNetServer } from 'node:net';
 import test from 'node:test';
 import { WebSocket } from 'ws';
 import { DAEMON_PACKAGE_VERSION, startDaemon } from '../dist/daemon/service.js';
@@ -16,6 +16,7 @@ import {
 } from '../dist/ipc/framing.js';
 import {
   connectLocalPipe,
+  listenLocalPipe,
 } from '../dist/ipc/transport.js';
 
 const windowsOnly = {
@@ -534,3 +535,84 @@ test(
     await closeServer(rebound);
   },
 );
+
+test(
+  'closes incomplete HTTP headers within the drain window and releases both listeners',
+  windowsOnly,
+  async (t) => {
+    const { daemon, pipeName, port } = await startTestDaemon(t, {}, {
+      shutdownDrainMs: 50,
+    });
+    const socket = createConnection(port, '127.0.0.1');
+    socket.on('error', () => {});
+    let deadline;
+    try {
+      await new Promise((resolve, reject) => {
+        socket.once('connect', resolve);
+        socket.once('error', reject);
+      });
+      socket.write('GET / HTTP/1.1\r\nHost: 127.0.0.1');
+      await Promise.race([
+        daemon.close(),
+        new Promise((_, reject) => {
+          deadline = setTimeout(() => reject(new Error('Daemon shutdown exceeded deadline.')), 1500);
+        }),
+      ]);
+      assert.equal(daemon.status, 'closed');
+      await assert.rejects(connectLocalPipe(pipeName));
+      const rebound = createNetServer();
+      try {
+        await listenAt(rebound, port);
+      } finally {
+        await closeServer(rebound);
+      }
+    } finally {
+      clearTimeout(deadline);
+      socket.destroy();
+      await daemon.close();
+    }
+  },
+);
+
+test('rejects unsupported runtime modes before opening either listener', windowsOnly, async () => {
+  for (const runtimeMode of ['staging', null]) {
+    const port = await reservePort();
+    const pipeName = uniquePipeName();
+    await assert.rejects(startDaemon({
+      env: makeEnvironment(port),
+      runtimeMode,
+      pipeName,
+      signalTarget: new EventEmitter(),
+    }), /Runtime mode must be production or development/);
+    await assert.rejects(connectLocalPipe(pipeName));
+    const rebound = createNetServer();
+    try {
+      await listenAt(rebound, port);
+    } finally {
+      await closeServer(rebound);
+    }
+  }
+});
+
+test('bounds a duplicate probe on an occupied pipe before binding WebSocket', windowsOnly, async () => {
+  const pipeName = uniquePipeName();
+  const port = await reservePort();
+  const server = await listenLocalPipe(pipeName, () => {}, () => {});
+  try {
+    const startedAt = Date.now();
+    await assert.rejects(startDaemon({
+      env: makeEnvironment(port, { BOOKMARKDOWN_HELLO_TIMEOUT_MS: '250' }),
+      pipeName,
+      signalTarget: new EventEmitter(),
+    }), /health probe timed out/);
+    assert.ok(Date.now() - startedAt < 2000);
+    const rebound = createNetServer();
+    try {
+      await listenAt(rebound, port);
+    } finally {
+      await closeServer(rebound);
+    }
+  } finally {
+    await server.close();
+  }
+});
