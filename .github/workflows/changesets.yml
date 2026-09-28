@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   version-pr:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -24,6 +24,8 @@ jobs:
         run: npm ci
       - name: Create or update version pull request
         uses: changesets/action@v1
+        env:
+          HOME: ${{ runner.temp }}
         with:
           version: npm run version-packages
           branch: develop
