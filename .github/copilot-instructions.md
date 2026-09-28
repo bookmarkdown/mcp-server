@@ -20,7 +20,7 @@ ms.date: 2026-09-28
 * MCP stdout 只輸出協定訊息；診斷、啟動狀態與錯誤寫到 stderr。
 * WebSocket 是獨立的應用層 RPC channel，不是 MCP transport。預設只綁定 `127.0.0.1:38471`，不得對外網卡監聽、掃描替代 port，或連到占用 port 的其他程序。
 * port 占用或 bridge 設定失效時，MCP stdio 仍須可用；依賴 extension 的工具回傳有限且明確的錯誤。
-* `npm start -- daemon` 與套件 CLI 預設使用 production；`npm run dev -- daemon` 明確使用 development。不要從 `NODE_ENV` 推斷 runtime mode。
+* `npm start` 與套件 CLI 未提供子命令時預設啟動 production daemon；`npm start -- proxy` 啟動 MCP proxy。`npm run dev -- daemon` 明確使用 development。不要從 `NODE_ENV` 推斷 runtime mode。
 * WebSocket Origin 在兩種模式都必須符合 `chrome-extension://[a-p]{32}`，hello extension ID 必須等於 Origin ID，並通過 pairing token 驗證。Production 另外要求精確符合 `BOOKMARKDOWN_EXTENSION_IDS`；development 不使用固定 ID allowlist。Origin 不是認證；不得把 token 放進 URL、命令列參數、log、MCP 回覆或 source control。
 * IPC health 包含 runtime mode；duplicate-daemon 偵測只接受健康且同模式的 daemon。Proxy 必須可連接兩種模式，不得因 mode 增加其他 MCP/工具權限。
 * 所有訊息、參數、回覆都要驗證 schema。維持 payload、連線數、註冊 instance 數、pending request 數與 timeout 上限；只接受明確 allowlist 的操作。
@@ -45,7 +45,7 @@ Extension 必須在計數與清單中排除 incognito 視窗和分頁；server �
 * 新增或修改 WebSocket 行為時，使用一般 Node.js WebSocket client 測試握手、驗證、request/response 關聯、逾時、斷線、限制與 MCP 結果。測試不得依賴 Chrome 或未實作的 extension。
 * 每次修改後先跑能檢查該行為的窄測試，再依風險執行完整測試、typecheck 和 build。不要宣稱未執行的檢查已通過。
 * 保留 `127.0.0.1` 綁定、stdout/stderr 分工和 fail-closed 認證。不得在錯誤訊息或 log 印出 pairing token、敏感 URL 或頁面內容。
-* 套件目前是 private。沒有明確發布授權前，不要更改為公開發布或宣稱 `npx @bookmarkdown/mcp-server` 可用。
+* 套件已設定為公開 npm 發布，但尚未發佈至 registry。不得宣稱 `npx @bookmarkdown/mcp-server` 可用，除非已完成首次發布與 registry 安裝驗證。只有使用者明確要求時才執行實際發布。
 
 ## 文件維護
 

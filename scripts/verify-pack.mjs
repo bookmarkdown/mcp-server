@@ -21,6 +21,7 @@ const requiredPaths = [
   "dist/cli.js",
   "dist/daemon/service.js",
   "dist/ipc/transport.js",
+  "LICENSE",
   "README.md",
   "README.zh-TW.md",
 ];

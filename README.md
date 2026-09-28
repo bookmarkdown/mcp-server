@@ -88,4 +88,4 @@ For development mode, start the daemon with `npm run dev -- daemon`. Development
 
 ## License
 
-No license file is currently included. Do not assume permission to reuse or redistribute this code.
+This project is licensed under the [MIT License](LICENSE).

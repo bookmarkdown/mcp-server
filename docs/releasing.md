@@ -9,7 +9,7 @@ ms.topic: how-to
 
 The package is configured for public npm publication, but it has not been published. The `npx` command is not available until the first version appears in the npm registry and an installation smoke test passes.
 
-The repository contains CI, Changesets, and tag-publishing workflows. The `develop` branch, branch protection rules, npm trusted publisher, and protected `npm` GitHub environment still require maintainer setup. A license must also be selected and added before the first public release.
+The repository contains CI, Changesets, and tag-publishing workflows. The project uses the MIT license. The `develop` branch, branch protection rules, npm trusted publisher, and protected `npm` GitHub environment still require maintainer setup.
 
 ## Branch model
 
@@ -51,7 +51,7 @@ The publish workflow skips the publish command when that exact package version i
 
 Complete these steps before creating the first public release:
 
-1. Choose the project license, add the corresponding `LICENSE` file, and set the matching `license` field in `package.json`.
+1. Confirm the MIT `LICENSE` file and `license` field are included in the release commit and npm tarball.
 2. Confirm an authorized npm account controls the `@bookmarkdown` scope and can publish `@bookmarkdown/mcp-server` as a public package.
 3. Merge the initial release version to `main`, then publish that exact version once from the release commit with an authorized maintainer account and npm's required two-factor authentication.
 4. In npm package settings, add a GitHub Actions trusted publisher for `bookmarkdown/mcp-server`, workflow filename `publish.yml`, and environment `npm`. Allow direct publishing for this publisher.

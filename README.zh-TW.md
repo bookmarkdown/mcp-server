@@ -88,4 +88,4 @@ npm run build
 
 ## 授權
 
-目前未附授權條款檔案。請勿假設你可以重用或再散布此程式碼。
+本專案採用 [MIT License](LICENSE)。
