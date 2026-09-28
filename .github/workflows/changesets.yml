@@ -28,4 +28,4 @@ jobs:
           HOME: ${{ runner.temp }}
         with:
           version: npm run version-packages
-          baseBranch: develop
+          branch: develop
