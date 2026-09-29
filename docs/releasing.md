@@ -7,7 +7,13 @@ ms.topic: how-to
 
 ## Release status
 
-`@bookmarkdown/mcp-server@0.1.3` is published on npm and is the current `latest` version. It remains Windows-only; the current source adds Linux support. Clean Windows and Linux package installation smoke tests are pending, so the public README points Linux users to source installation. The README snapshot on npm predates publication and must be updated in a later version after the smoke tests pass.
+`@bookmarkdown/mcp-server@0.1.3` is published on npm and is the current `latest`
+version. It remains Windows-only; the `0.2.0` release candidate adds Linux
+support. Its tarball has installed and completed an MCP initialize smoke test on
+Ubuntu. A clean Windows package smoke test and final release validation remain
+pending, so the public README continues to point Linux users to source
+installation. Update the README in the release after both platform smoke tests
+pass.
 
 The repository contains a Linux/Windows CI matrix, Ubuntu Changesets workflow, and Ubuntu tag-publishing workflow. The project uses the MIT license, and the `develop` branch exists. Before the next release, verify branch protection, GitHub Actions pull request permissions, the npm trusted publisher, and the protected `npm` GitHub environment.
 
@@ -51,12 +57,20 @@ The publish workflow skips the publish command when that exact package version i
 
 The npm `latest` version is `0.1.3` and supports Windows only. The Linux support change is a `minor` Changeset, so its expected version is `0.2.0` when applied to `0.1.3`. Do not reuse or move the already-published `v0.1.3` tag.
 
-At the `0.1.3` release baseline, `main` and `develop` both contain package version `0.1.3` and `.changeset/linux-lan-support.md`. As of 2026-09-30, the remote `changeset-release/develop` branch still declares `0.1.1`. The Changesets workflow runs only on pushes to `develop`.
+The Linux support Changeset was consumed by Version Packages PR #4, which
+merged `0.2.0` into `develop`. The release branch is `release/0.2.0`; the version
+has not been tagged or published. A minor bump from `0.1.1` also calculates to
+`0.2.0`, so compare the generated package version with the latest published
+version rather than treating the branch's starting version as the release
+result.
 
-1. Confirm that `develop` contains the `0.1.3` baseline and the Linux support Changeset. This main-to-develop sync is already present at this checkpoint; if it is missing in a later release, merge `main` into `develop` through a reviewed pull request. Do not merge a generated version pull request based on `0.1.1`, because it would propose a version below the published `0.1.3`.
-2. After a push to `develop`, let the Changesets workflow create or update its version pull request. Review that it proposes `0.2.0` and updates `package.json`, `package-lock.json`, and `CHANGELOG.md`. If the existing version branch still proposes a version below `0.2.0`, refresh it before merging. Do not edit the package version manually.
-3. After merging the version pull request into `develop`, follow release steps 2 and 3 above using `release/0.2.0`. Run the Linux and Windows CI checks, and install the packed tarball in clean Linux and Windows environments. `npm run verify:pack` checks archive contents but does not install or run the package. Update the public README installation status after the tarball smoke tests pass.
-4. Merge the release pull request into `main`. Confirm that `package.json` reports `0.2.0`, then create and push the tag from the merged `main` commit:
+1. Complete final validation on `release/0.2.0`, including Linux and Windows CI
+   checks and clean tarball installation smoke tests. The Ubuntu MCP initialize
+   smoke test has passed; the Windows package smoke test remains required.
+   `npm run verify:pack` checks archive contents, installs the tarball, and
+   initializes its MCP proxy. Update the public README installation status after
+   both platform smoke tests pass.
+2. Merge the release pull request into `main`. Confirm that `package.json` reports `0.2.0`, then create and push the tag from the merged `main` commit:
 
    ```bash
    git switch main
@@ -66,7 +80,7 @@ At the `0.1.3` release baseline, `main` and `develop` both contain package versi
    ```
 
    Pushing the tag starts the publish workflow. Confirm it succeeds and that `npm view @bookmarkdown/mcp-server version` reports `0.2.0`; do not run `npm publish` manually while the workflow is publishing.
-5. Merge `main` back into `develop` after the release so both branches retain the published version and release-only changes.
+3. Merge `main` back into `develop` after the release so both branches retain the published version and release-only changes.
 
 ## First-release setup
 
