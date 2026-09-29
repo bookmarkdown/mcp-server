@@ -5,7 +5,7 @@
 BookMarkdown MCP Server connects an MCP host to a companion browser extension running on the same machine. A local daemon accepts the extension connection over a loopback WebSocket, while an MCP host communicates with a separate stdio proxy over a Windows named pipe.
 
 > [!IMPORTANT]
-> This project currently supports Windows only. The server and companion extension implementations are complete; compatibility has not been verified in a real Chrome installation, with Chrome Local Network Access, or with a specific MCP host. npm publication is being prepared; install from source using the instructions below.
+> This project currently supports Windows only. The server and companion extension implementations are complete; compatibility has not been verified in a real Chrome installation, with Chrome Local Network Access, or with a specific MCP host. Version `0.1.3` is published on npm, but a clean Windows installation smoke test is still pending. Use the source installation steps below for now.
 
 ## Features
 
@@ -41,11 +41,7 @@ npm ci
 npm run build
 ```
 
-The package is not available through `npx` until its first npm release. After publication, run the CLI with the published version:
-
-```powershell
-npx --yes --package=@bookmarkdown/mcp-server@<version> -- bookmarkdown-mcp-server
-```
+Version `0.1.3` is published on npm. A clean Windows installation smoke test has not been completed, so use the source setup above for now.
 
 Set the required environment variables below before starting the daemon.
 

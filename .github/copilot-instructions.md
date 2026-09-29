@@ -45,7 +45,7 @@ Extension 必須在計數與清單中排除 incognito 視窗和分頁；server �
 * 新增或修改 WebSocket 行為時，使用一般 Node.js WebSocket client 測試握手、驗證、request/response 關聯、逾時、斷線、限制與 MCP 結果。測試不得依賴 Chrome 或未實作的 extension。
 * 每次修改後先跑能檢查該行為的窄測試，再依風險執行完整測試、typecheck 和 build。不要宣稱未執行的檢查已通過。
 * 保留 `127.0.0.1` 綁定、stdout/stderr 分工和 fail-closed 認證。不得在錯誤訊息或 log 印出 pairing token、敏感 URL 或頁面內容。
-* 套件已設定為公開 npm 發布，但尚未發佈至 registry。不得宣稱 `npx @bookmarkdown/mcp-server` 可用，除非已完成首次發布與 registry 安裝驗證。只有使用者明確要求時才執行實際發布。
+* `@bookmarkdown/mcp-server@0.1.3` 已發布至 npm，registry metadata 已確認；乾淨 Windows 安裝與 `npx` smoke test 尚未驗證。下一版前須確認 npm Trusted Publisher 設定可讓 workflow 透過 OIDC 發布。除非使用者明確要求，不得執行實際發布。
 
 ## 文件維護
 

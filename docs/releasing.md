@@ -7,7 +7,7 @@ ms.topic: how-to
 
 ## Release status
 
-The package `@bookmarkdown/mcp-server` is configured for public npm publication, but it has not been published. The `npx` command is not available until the first version appears in the npm registry and an installation smoke test passes.
+`@bookmarkdown/mcp-server@0.1.3` is published on npm and is the current `latest` version. A clean Windows installation smoke test remains pending, so the public README continues to point users to source installation. The README snapshot on npm predates publication and must be updated in a later version after the smoke test passes.
 
 The repository contains CI, Changesets, and tag-publishing workflows. The project uses the MIT license. The `develop` branch, branch protection rules, npm trusted publisher, and protected `npm` GitHub environment still require maintainer setup.
 
@@ -41,22 +41,19 @@ Changes that do not affect the npm artifact do not need a Changeset. When uncert
 2. Create `release/<version>` from `develop`. Run `npm test`, `npm run typecheck`, and `npm run verify:pack`; address release blockers on this branch.
 3. Open a pull request from the release branch to `main`. Merge it only after the required checks pass.
 4. Create and push an annotated `vX.Y.Z` tag on the merged `main` commit, using the version in `package.json`.
-5. The `Publish to npm` workflow validates the tag, tests the package, and publishes through npm Trusted Publishing. The GitHub `npm` environment can require maintainer approval before the job runs.
+5. The `Publish to npm` workflow validates the tag, tests the package, and publishes through npm Trusted Publishing. The initial release, `v0.1.3`, was published manually after the workflow's publish step failed. Before publishing another version, verify the npm Trusted Publisher uses repository `bookmarkdown/mcp-server`, workflow filename `publish.yml`, and environment `npm`. The GitHub `npm` environment can require maintainer approval before the job runs.
 6. Confirm the version is visible on npm, then install it in a clean Windows environment and smoke-test `bookmarkdown-mcp-server` before updating the public installation instructions.
 7. Merge `main` back into `develop` so release-only changes are retained.
 
-The publish workflow skips the publish command when that exact package version is already in the registry. This supports bootstrapping the first release with a maintainer-authorized manual publish before configuring Trusted Publishing. It does not make an unpublished package available through `npx`.
+The publish workflow skips the publish command when that exact package version is already in the registry. This allowed the first release to be published manually before configuring Trusted Publishing and prevents a duplicate publish when the same version is checked again. An unpublished package is not available through `npx`.
 
 ## First-release setup
 
-Complete these steps before creating the first public release:
+The first public version, `0.1.3`, was manually published from tagged commit `c341306` after the workflow's npm publish step failed. Before publishing a later version, complete these setup checks:
 
-1. Confirm the MIT `LICENSE` file and `license` field are included in the release commit and npm tarball.
-2. Confirm an authorized npm account controls the `@bookmarkdown` scope and can publish `@bookmarkdown/mcp-server` as a public package.
-3. Merge the initial release version to `main`, then publish that exact version once from the release commit with an authorized maintainer account and npm's required two-factor authentication.
-4. In npm package settings, add a GitHub Actions trusted publisher for `bookmarkdown/mcp-server`, workflow filename `publish.yml`, and environment `npm`. Allow direct publishing for this publisher.
-5. Create the matching `vX.Y.Z` tag. The workflow verifies the version and skips publishing because the initial version already exists. Later tags publish through OIDC.
-6. Configure the GitHub `npm` environment with required reviewers. Keep the workflow on a GitHub-hosted runner and preserve `id-token: write` permission.
+1. In npm package settings, configure a GitHub Actions trusted publisher for `bookmarkdown/mcp-server`, workflow filename `publish.yml`, and environment `npm`. Allow direct publishing for this publisher.
+2. Configure the GitHub `npm` environment with required reviewers. Keep the workflow on a GitHub-hosted runner and preserve `id-token: write` permission.
+3. Confirm a later tagged release either skips publishing when its exact version already exists or publishes successfully through OIDC.
 
 The publish workflow installs npm CLI 11.5.1 because npm Trusted Publishing requires that version or newer. Do not add a long-lived npm publish token to repository secrets.
 

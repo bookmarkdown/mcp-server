@@ -5,7 +5,7 @@
 BookMarkdown MCP Server 讓 MCP host 與同一台電腦上的 companion browser extension 溝通。本機 daemon 透過 loopback WebSocket 接受 extension 連線；MCP host 則透過 Windows Named Pipe 與獨立的 stdio proxy 通訊。
 
 > [!IMPORTANT]
-> 本專案目前僅支援 Windows。Server 與 companion extension 的串接實作已完成；真實 Chrome、Chrome Local Network Access 與指定 MCP host 的相容性尚未驗證。npm 發布流程正在準備中；請依下方步驟從原始碼安裝。
+> 本專案目前僅支援 Windows。Server 與 companion extension 的串接實作已完成；真實 Chrome、Chrome Local Network Access 與指定 MCP host 的相容性尚未驗證。`0.1.3` 已發布至 npm，但乾淨 Windows 環境的安裝 smoke test 尚未完成；目前請依下方步驟從原始碼安裝。
 
 ## 功能
 
@@ -41,11 +41,7 @@ npm ci
 npm run build
 ```
 
-首次 npm 版本發布前，尚不能透過 `npx` 安裝。發布後，請以實際發布版本執行 CLI：
-
-```powershell
-npx --yes --package=@bookmarkdown/mcp-server@<version> -- bookmarkdown-mcp-server
-```
+`0.1.3` 已發布至 npm。乾淨 Windows 環境的安裝 smoke test 尚未完成，因此目前仍請依照本頁的原始碼安裝方式。
 
 啟動 daemon 前，請先設定下方列出的必要環境變數。
 
