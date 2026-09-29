@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { realpathSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startDaemon } from './daemon/service.js';
 import { startProxyService } from './proxy/service.js';
