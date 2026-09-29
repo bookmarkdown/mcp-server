@@ -9,11 +9,10 @@ import { WebSocket } from 'ws';
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const daemonServiceUrl = new URL('../dist/daemon/service.js', import.meta.url).href;
 const proxyServiceUrl = new URL('../dist/proxy/service.js', import.meta.url).href;
-const windowsOnly = {
-  skip:
-    process.platform === 'win32'
-      ? false
-      : 'Daemon/proxy process tests require Windows Named Pipes.',
+const supportedPlatforms = {
+  skip: !['win32', 'linux'].includes(process.platform)
+    ? 'Daemon/proxy process tests require Windows or Linux local IPC.'
+    : false,
 };
 const extensionId = 'a'.repeat(32);
 const secondExtensionId = 'b'.repeat(32);
@@ -421,7 +420,7 @@ function assertToolError(result, code) {
 
 test(
   'recovers when the daemon starts after a proxy without restarting the proxy',
-  windowsOnly,
+  supportedPlatforms,
   async (t) => {
     const pipeName = uniquePipeName();
     const port = await reservePort();
@@ -480,7 +479,7 @@ test(
 
 test(
   'routes concurrent calls from multiple proxy processes to their own instances',
-  windowsOnly,
+  supportedPlatforms,
   async (t) => {
     const pipeName = uniquePipeName();
     const port = await reservePort();
@@ -544,7 +543,7 @@ test(
 
 test(
   'rolls back the WebSocket listener when daemon IPC startup fails',
-  windowsOnly,
+  supportedPlatforms,
   async () => {
     const port = await reservePort();
     const daemon = startDaemonProcess(
@@ -560,7 +559,7 @@ test(
   },
 );
 
-test('isolates cross-proxy cancellation and extension errors in the running daemon', windowsOnly, async (t) => {
+test('isolates cross-proxy cancellation and extension errors in the running daemon', supportedPlatforms, async (t) => {
   const pipeName = uniquePipeName();
   const port = await reservePort();
   const daemon = startDaemonProcess(pipeName, makeDaemonEnvironment(port));

@@ -1,25 +1,29 @@
 ---
 title: "瀏覽器整合指南"
-description: "瀏覽器 extension 連線至 BookMarkdown MCP Server loopback WebSocket 的目前協定與 client 範例。"
-ms.date: 2026-09-28
+description: "瀏覽器 extension 連線至 BookMarkdown MCP Server loopback 或 TLS 保護的區網 WebSocket 協定與 client 範例。"
+ms.date: 2026-09-29
 ms.topic: how-to
 ---
 
 ## 狀態與驗證範圍
 
-Browser integration 的 server 與 companion extension 實作已完成。此 repository 的原始碼與一般 Node.js WebSocket client 測試確認 server-side contract；companion extension 已實作 protocol v2 handshake、probe、browser RPC 與網路錯誤後的退避重連，其單元測試涵蓋 handshake、probe、browser operations 和設定，但沒有重連／退避專項測試。真實 Chrome extension 互通性、extension 權限、Chrome Local Network Access，以及指定 MCP host 的相容性驗證仍未完成。以下 JavaScript 示範 server 接受的訊息形狀。
+此 repository 的 server 實作 protocol v2 handshake、probe 與 browser RPC，Node.js 測試涵蓋 loopback 及 Linux 私有介面上的 WSS contract。區網 listener 不代表 companion extension 已支援遠端 URL：extension 必須能設定伺服器 `wss://` 位址並信任其憑證。真實 Chrome extension 互通性、extension 權限、Chrome Local Network Access，以及指定 MCP host 的相容性驗證仍未完成。以下 JavaScript 示範 server 接受的訊息形狀。
 
 Browser integration 文件應涵蓋的範圍與維護規則見[文件規約](documentation-conventions.md)。
 
 ## 連線條件
 
-使用 loopback WebSocket URL：
+預設使用 loopback WebSocket URL：
 
 ```text
 ws://127.0.0.1:38471/
 ```
 
-預設 port 為 `38471`，可由 daemon 的 `BOOKMARKDOWN_WS_PORT` 設定。server 固定綁定 `127.0.0.1`，並要求 HTTP `Host` 完全等於 `127.0.0.1:<實際 port>`、path 為 `/`。Origin 必須符合 `chrome-extension://[a-p]{32}`；瀏覽器端應由 extension origin 提出連線，不能把 Origin 當成認證。
+預設 host 為 `127.0.0.1`，port 為 `38471`；可用 `BOOKMARKDOWN_WS_PORT` 設定 port。選用的區網模式需將 `BOOKMARKDOWN_WS_HOST` 設為單一 RFC1918 IPv4 位址，並同時設定 `BOOKMARKDOWN_WS_TLS_CERT_FILE` 與 `BOOKMARKDOWN_WS_TLS_KEY_FILE`。此模式使用 `wss://`，TLS 最低版本為 1.2；不接受 `0.0.0.0`、其他 wildcard 或非 RFC1918 位址。只設定 TLS 憑證而 host 保持 loopback 時，listener 也會使用 WSS。
+
+Server 要求 HTTP `Host` 完全等於設定的 host 與實際 port、path 為 `/`。Origin 必須符合 `chrome-extension://[a-p]{32}`；瀏覽器端應由 extension origin 提出連線，不能把 Origin 當成認證。正式模式仍要求精確的 `BOOKMARKDOWN_EXTENSION_IDS` allowlist。所有模式都要求 pairing token；區網模式使用 TLS 保護 token 與 browser RPC 資料。
+
+TLS certificate 必須適用於設定的 IP 位址，且 client 裝置必須信任簽發者。只允許可信任的區網 client 通過主機防火牆。Companion extension 必須提供可設定的 server URL，並具備相應的 Chrome 網路權限；本 repository 不包含 extension 端設定，這些瀏覽器條件尚未驗證。
 
 正式模式要求 Origin 中的 extension ID 精確列於 daemon 的 `BOOKMARKDOWN_EXTENSION_IDS`。開發模式不要求固定 allowlist，但 ID 仍須符合格式。兩種模式都要求 hello 的 `extensionId` 與 Origin ID 完全相同，並驗證 pairing token。無效的 Host、path、Origin 或正式模式 allowlist ID 會在 WebSocket upgrade 階段回覆 HTTP `403`，不會收到 `hello-ack`；連線數已達上限時回覆 HTTP `503`。
 
@@ -275,11 +279,16 @@ const supportedOperations = [
   "browser.moveTab",
 ];
 
-function connectExtension(pairingToken, instanceId, browserOperations) {
+function connectExtension(
+  pairingToken,
+  instanceId,
+  browserOperations,
+  webSocketUrl = "ws://127.0.0.1:38471/",
+) {
   const operations = supportedOperations.filter((name) =>
     Object.hasOwn(browserOperations, name),
   );
-  const socket = new WebSocket("ws://127.0.0.1:38471/");
+  const socket = new WebSocket(webSocketUrl);
   let authenticated = false;
 
   socket.addEventListener("open", () => {
@@ -358,4 +367,5 @@ hello 預設須在 5 秒內送達；browser request 預設等待 5 秒，可用 
 
 socket 中斷會讓該連線上的 pending request 失敗，instance 在 daemon 的記憶體 registry 中標為 offline；daemon 重啟時 registry 清空。相同 `instanceId` 與 extension ID 再次註冊會取代舊連線，舊 socket 以 close code `4001`、reason `replaced` 關閉；相同 instance ID 搭配不同 extension ID 則遭拒。連線逾時或中斷後，server 不會替 client 重連。
 
-Server 不會替 client 重連。Companion extension 已實作網路錯誤後重新連線，退避間隔最高為 30 秒，並在連線恢復後重新註冊 instance；目前沒有重連／退避專項自動化測試。Chrome Local Network Access 與 extension 權限設定仍需在目標 Chrome 版本和 extension 中實際驗證；Node.js 測試不代表瀏覽器互通性已通過。
+Server 不會替 client 重連。Companion extension 已實作網路錯誤後重新連線，退避間隔最高為 30 秒，並在連線恢復後重新註冊 instance；目前沒有重連／退避專項自動化測試。
+Chrome Local Network Access 與 extension 權限設定仍需在目標 Chrome 版本和 extension 中實際驗證；Node.js 測試不代表瀏覽器互通性已通過。

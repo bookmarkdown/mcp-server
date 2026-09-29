@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 import { createConnection, createServer as createNetServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { getLocalPipePath } from '../dist/ipc/transport.js';
 
 const cliPath = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
 const builtCliPath = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
@@ -282,7 +283,9 @@ test('dispatches proxy mode without a daemon and keeps MCP on stdout', async (t)
   }
 });
 
-test('starts the built daemon CLI and releases its listeners on shutdown', { skip: process.platform !== 'win32' }, async (t) => {
+test('starts the built daemon CLI and releases its listeners on shutdown', {
+  skip: !['win32', 'linux'].includes(process.platform),
+}, async (t) => {
   const reserved = createNetServer();
   await new Promise((resolve, reject) => {
     reserved.once('error', reject);
@@ -331,7 +334,7 @@ test('starts the built daemon CLI and releases its listeners on shutdown', { ski
   }
   assert.equal(stdout, '');
   assert.equal(stderr.includes(cliToken), false);
-  assert.match(stderr, new RegExp(pipeName));
+  assert.ok(stderr.includes(getLocalPipePath(pipeName)));
   assert.equal(child.kill('SIGINT'), true);
   let exitTimer;
   try {

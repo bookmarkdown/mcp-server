@@ -1,16 +1,18 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { stat } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import test from 'node:test';
 import {
   connectLocalPipe,
+  getLocalPipePath,
   listenLocalPipe,
 } from '../src/ipc/transport.ts';
 
-const windowsOnly = {
-  skip:
-    process.platform === 'win32'
-      ? false
-      : 'Named Pipe transport tests require Windows.',
+const supportedPlatforms = {
+  skip: !['win32', 'linux'].includes(process.platform)
+    ? 'Local IPC transport tests require Windows or Linux.'
+    : false,
 };
 
 function uniquePipeName() {
@@ -55,11 +57,11 @@ function nextLine(socket) {
     };
     const onEnd = () => {
       cleanup();
-      reject(new Error('Pipe closed before a response arrived.'));
+      reject(new Error('IPC connection closed before a response arrived.'));
     };
     const onClose = () => {
       cleanup();
-      reject(new Error('Pipe closed before a response arrived.'));
+      reject(new Error('IPC connection closed before a response arrived.'));
     };
     const onError = (error) => {
       cleanup();
@@ -103,8 +105,8 @@ function waitForClose(socket) {
 }
 
 test(
-  'exchanges a request and correlated response over a local named pipe',
-  windowsOnly,
+  'exchanges a request and correlated response over local IPC',
+  supportedPlatforms,
   async (t) => {
     const { pipeName } = await startServer(t, echoRequests);
     const client = await connectLocalPipe(pipeName);
@@ -125,7 +127,7 @@ test(
 
 test(
   'keeps multiple proxy connections isolated when request IDs overlap',
-  windowsOnly,
+  supportedPlatforms,
   async (t) => {
     const { pipeName } = await startServer(t, echoRequests);
     const first = await connectLocalPipe(pipeName);
@@ -149,7 +151,7 @@ test(
 
 test(
   'closes accepted connections and the endpoint during server shutdown',
-  windowsOnly,
+  supportedPlatforms,
   async (t) => {
     const { pipeName, server } = await startServer(t, () => {});
     const first = await connectLocalPipe(pipeName);
@@ -169,7 +171,7 @@ test(
   },
 );
 
-test('cancels a pending pipe connection and releases its socket', windowsOnly, async (t) => {
+test('cancels a pending IPC connection and releases its socket', supportedPlatforms, async (t) => {
   const sockets = new Set();
   const { pipeName, server } = await startServer(t, (socket) => {
     sockets.add(socket);
@@ -184,7 +186,24 @@ test('cancels a pending pipe connection and releases its socket', windowsOnly, a
   await assert.rejects(connectLocalPipe(pipeName));
 });
 
-test('rejects unbounded connection deadlines before creating a socket', windowsOnly, async () => {
+test('rejects unbounded connection deadlines before creating a socket', supportedPlatforms, async () => {
   await assert.rejects(connectLocalPipe(uniquePipeName(), { timeoutMs: 0 }), RangeError);
   await assert.rejects(connectLocalPipe(uniquePipeName(), { timeoutMs: 30001 }), RangeError);
+});
+
+test('restricts Linux Unix socket access to the current user', {
+  skip: process.platform !== 'linux',
+}, async (t) => {
+  const { pipeName, server } = await startServer(t, () => {});
+  const socketPath = getLocalPipePath(pipeName);
+  const [directoryStats, socketStats] = await Promise.all([
+    stat(dirname(socketPath)),
+    stat(socketPath),
+  ]);
+
+  assert.equal(directoryStats.mode & 0o777, 0o700);
+  assert.equal(socketStats.mode & 0o777, 0o600);
+
+  await server.close();
+  await assert.rejects(stat(socketPath), { code: 'ENOENT' });
 });

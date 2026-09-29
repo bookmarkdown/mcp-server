@@ -1,7 +1,12 @@
+import { createHash } from 'node:crypto';
+import { chmod, lstat, mkdir, unlink } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { createConnection, createServer, type Socket } from 'node:net';
 
 const pipeNamePattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const pipePrefix = '\\\\.\\pipe\\';
+const unixSocketPathLimit = 108;
 
 export type LocalPipeConnectionHandler = (socket: Socket) => void;
 export type LocalPipeErrorHandler = (error: Error) => void;
@@ -17,7 +22,19 @@ export function getLocalPipePath(pipeName: string): string {
     );
   }
 
-  return `${pipePrefix}${pipeName}`;
+  if (process.platform === 'win32') {
+    return `${pipePrefix}${pipeName}`;
+  }
+  if (process.platform !== 'linux') {
+    throw new Error('Local IPC transport is supported on Windows and Linux only.');
+  }
+
+  const nameHash = createHash('sha256').update(pipeName).digest('hex').slice(0, 16);
+  const socketPath = join(tmpdir(), `bookmarkdown-${currentUserId()}`, `${nameHash}.sock`);
+  if (Buffer.byteLength(socketPath, 'utf8') >= unixSocketPathLimit) {
+    throw new RangeError('The local IPC runtime path is too long for a Unix domain socket.');
+  }
+  return socketPath;
 }
 
 export async function listenLocalPipe(
@@ -25,7 +42,10 @@ export async function listenLocalPipe(
   onConnection: LocalPipeConnectionHandler,
   onError: LocalPipeErrorHandler,
 ): Promise<LocalPipeServer> {
-  assertWindows();
+  const endpointPath = getLocalPipePath(pipeName);
+  if (process.platform === 'linux') {
+    await prepareUnixSocketPath(endpointPath);
+  }
 
   const activeSockets = new Set<Socket>();
   let listening = false;
@@ -59,8 +79,19 @@ export async function listenLocalPipe(
 
     server.on('error', handleServerError);
     server.once('listening', handleListening);
-    server.listen(getLocalPipePath(pipeName));
+    server.listen(endpointPath);
   });
+
+  if (process.platform === 'linux') {
+    try {
+      await chmod(endpointPath, 0o600);
+    } catch (error) {
+      await new Promise<void>((resolve, reject) => {
+        server.close((closeError) => closeError ? reject(closeError) : resolve());
+      });
+      throw error;
+    }
+  }
 
   return {
     close(): Promise<void> {
@@ -95,16 +126,16 @@ export async function connectLocalPipe(
   pipeName: string,
   options: LocalPipeConnectOptions = {},
 ): Promise<Socket> {
-  assertWindows();
+  const endpointPath = getLocalPipePath(pipeName);
   const timeoutMs = options.timeoutMs ?? 5000;
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30000) {
-    throw new RangeError('Named Pipe connect timeout must be between 1 and 30000 milliseconds.');
+    throw new RangeError('Local IPC connect timeout must be between 1 and 30000 milliseconds.');
   }
   if (options.signal?.aborted) {
-    throw new DOMException('Named Pipe connect cancelled.', 'AbortError');
+    throw new DOMException('Local IPC connect cancelled.', 'AbortError');
   }
 
-  const socket = createConnection(getLocalPipePath(pipeName));
+  const socket = createConnection(endpointPath);
   return new Promise<Socket>((resolve, reject) => {
     const cleanup = () => {
       clearTimeout(timer);
@@ -122,10 +153,10 @@ export async function connectLocalPipe(
       reject(error);
     };
     const handleAbort = () => handleError(
-      new DOMException('Named Pipe connect cancelled.', 'AbortError'),
+      new DOMException('Local IPC connect cancelled.', 'AbortError'),
     );
     const timer = setTimeout(() => handleError(
-      new Error('Named Pipe connect timed out.'),
+      new Error('Local IPC connect timed out.'),
     ), timeoutMs);
 
     socket.once('connect', handleConnect);
@@ -137,14 +168,118 @@ export async function connectLocalPipe(
   });
 }
 
-function assertWindows(): void {
-  if (process.platform !== 'win32') {
-    throw new Error('Local Named Pipe transport is supported on Windows only.');
+async function prepareUnixSocketPath(socketPath: string): Promise<void> {
+  const directoryPath = dirname(socketPath);
+  const uid = currentUserId();
+  try {
+    await mkdir(directoryPath, { mode: 0o700 });
+  } catch (error) {
+    if (errorCode(error) !== 'EEXIST') {
+      throw error;
+    }
   }
+
+  let directoryStats = await lstat(directoryPath);
+  if (!directoryStats.isDirectory() || directoryStats.uid !== uid) {
+    throw new Error('The local IPC runtime directory must be owned by the current user.');
+  }
+  if ((directoryStats.mode & 0o777) !== 0o700) {
+    await chmod(directoryPath, 0o700);
+    directoryStats = await lstat(directoryPath);
+  }
+  if ((directoryStats.mode & 0o777) !== 0o700) {
+    throw new Error('The local IPC runtime directory must have mode 0700.');
+  }
+
+  await removeStaleUnixSocket(socketPath, uid);
+}
+
+async function removeStaleUnixSocket(socketPath: string, uid: number): Promise<void> {
+  let originalStats;
+  try {
+    originalStats = await lstat(socketPath);
+  } catch (error) {
+    if (errorCode(error) === 'ENOENT') {
+      return;
+    }
+    throw error;
+  }
+  if (!originalStats.isSocket() || originalStats.uid !== uid) {
+    throw new Error('The local IPC endpoint path is not a socket owned by the current user.');
+  }
+
+  if (await isUnixSocketActive(socketPath)) {
+    const error = new Error('The local IPC endpoint is already in use.') as NodeJS.ErrnoException;
+    error.code = 'EADDRINUSE';
+    throw error;
+  }
+
+  let currentStats;
+  try {
+    currentStats = await lstat(socketPath);
+  } catch (error) {
+    if (errorCode(error) === 'ENOENT') {
+      return;
+    }
+    throw error;
+  }
+  if (
+    currentStats.isSocket() &&
+    currentStats.uid === uid &&
+    currentStats.dev === originalStats.dev &&
+    currentStats.ino === originalStats.ino
+  ) {
+    await unlink(socketPath);
+  }
+}
+
+function isUnixSocketActive(socketPath: string): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    const socket = createConnection(socketPath);
+    let settled = false;
+    const finish = (active: boolean, error?: Error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      socket.destroy();
+      if (error) {
+        reject(error);
+      } else {
+        resolve(active);
+      }
+    };
+    const timer = setTimeout(() => {
+      finish(false, new Error('Unable to verify the existing local IPC endpoint.'));
+    }, 1000);
+
+    socket.once('connect', () => finish(true));
+    socket.once('error', (error) => {
+      if (errorCode(error) === 'ECONNREFUSED' || errorCode(error) === 'ENOENT') {
+        finish(false);
+      } else {
+        finish(false, error);
+      }
+    });
+  });
+}
+
+function errorCode(error: unknown): string | undefined {
+  return error instanceof Error && 'code' in error && typeof error.code === 'string'
+    ? error.code
+    : undefined;
+}
+
+function currentUserId(): number {
+  if (typeof process.getuid !== 'function') {
+    throw new Error('The Linux IPC transport requires the current user ID.');
+  }
+  return process.getuid();
 }
 
 function toError(error: unknown): Error {
   return error instanceof Error
     ? error
-    : new Error('Local Named Pipe connection handler failed.');
+    : new Error('Local IPC connection handler failed.');
 }

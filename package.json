@@ -1,7 +1,7 @@
 {
   "name": "@mesak/bmd-mcp-server",
   "version": "0.1.1",
-  "description": "Local BookMarkdown MCP server with a loopback WebSocket bridge",
+  "description": "Local BookMarkdown MCP server with a WebSocket bridge",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -31,7 +31,8 @@
     "node": ">=24.11.0"
   },
   "os": [
-    "win32"
+    "win32",
+    "linux"
   ],
   "publishConfig": {
     "access": "public"

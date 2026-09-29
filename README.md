@@ -2,10 +2,10 @@
 
 [English](README.md) | [繁體中文](README.zh-TW.md)
 
-BookMarkdown MCP Server connects an MCP host to a companion browser extension running on the same machine. A local daemon accepts the extension connection over a loopback WebSocket, while an MCP host communicates with a separate stdio proxy over a Windows named pipe.
+BookMarkdown MCP Server connects an MCP host to a companion browser extension. The daemon accepts the extension over WebSocket, using loopback by default; the MCP host communicates with a separate stdio proxy over local IPC, using Windows Named Pipes or Linux Unix domain sockets.
 
 > [!IMPORTANT]
-> This project currently supports Windows only. Version `0.1.1` of `@mesak/bmd-mcp-server` is visible on npm, but a clean Windows installation smoke test is still pending. The server and companion extension implementations are complete; compatibility has not been verified in a real Chrome installation, with Chrome Local Network Access, or with a specific MCP host.
+> The current source checkout supports Windows and Linux. Published version `0.1.1` predates Linux support, and clean package installation smoke tests have not been run. Real Chrome, companion extension, Chrome Local Network Access, and specific MCP host compatibility remain unverified. Optional LAN connections require WSS and a companion extension configured for the server URL.
 
 ## Features
 
@@ -27,58 +27,58 @@ See [Features and limitations (Traditional Chinese)](docs/features.md), [Archite
 
 ## Requirements
 
-* Windows
+* Windows or Linux
 * Node.js 24.11.0 or later
 * npm
 * A compatible companion browser extension (maintained separately)
 
 ## Install from source
 
-```powershell
+```bash
 git clone https://github.com/bookmarkdown/mcp-server.git
 cd mcp-server
 npm ci
 npm run build
 ```
 
-Version `0.1.1` is available on npm. Use the `npx` commands below to run the published package. A clean Windows installation smoke test is still pending.
+Published version `0.1.1` is Windows-only and predates Linux support. This source checkout supports Linux; clean Windows and Linux package installation smoke tests remain pending.
 
 ## Start the daemon
 
 The CLI starts the production daemon when you omit the subcommand. The production daemon requires a high-entropy pairing token and the exact Chrome extension ID. The companion extension must be configured with the same token through its supported configuration flow.
 
-```powershell
-$env:BOOKMARKDOWN_BRIDGE_TOKEN = (node -p "require('node:crypto').randomBytes(32).toString('hex')")
-$env:BOOKMARKDOWN_EXTENSION_IDS = "<32-character-extension-id>"
-npx --yes --package=@mesak/bmd-mcp-server@0.1.1 -- bookmarkmarkdown-mcp-server
+```bash
+export BOOKMARKDOWN_BRIDGE_TOKEN="$(node -p "require('node:crypto').randomBytes(32).toString('hex')")"
+export BOOKMARKDOWN_EXTENSION_IDS="<32-character-extension-id>"
+npm start
 ```
 
-Keep the daemon running in this terminal. Press `Ctrl+C` to stop it. When running from a source checkout, use `npm start` instead. Do not put the pairing token in command-line arguments, URLs, logs, or source control.
+Keep the daemon running in this terminal. Press `Ctrl+C` to stop it. Published version `0.1.1` remains Windows-only; use this source checkout on Linux until a Linux-capable package version is released. Do not put the pairing token in command-line arguments, URLs, logs, or source control.
 
 ## Configure an MCP host
 
-Configure your MCP host to start the published CLI in proxy mode:
+Configure your MCP host to start the proxy built from this source checkout. Replace the example path with this checkout's absolute `dist/cli.js` path on the MCP host, and run `npm ci` and `npm run build` first.
 
 ```json
 {
   "mcpServers": {
     "bookmarkdown": {
-      "command": "npx",
-      "args": ["--yes", "--package=@mesak/bmd-mcp-server@0.1.1", "--", "bookmarkdown-mcp-server", "proxy"]
+      "command": "node",
+      "args": ["/absolute/path/to/mcp-server/dist/cli.js", "proxy"]
     }
   }
 }
 ```
 
-The MCP host starts only the proxy; it does not start the daemon. The proxy uses the default Windows named pipe, `bookmarkdown-mcp`, and does not need the WebSocket pairing token. Start the daemon before using browser tools.
+The MCP host starts only the proxy; it does not start the daemon. The proxy uses the default local IPC endpoint, a Windows Named Pipe or Linux Unix domain socket named `bookmarkdown-mcp`, and does not need the WebSocket pairing token. Start the daemon before using browser tools.
 
 ## Security and privacy
 
-The WebSocket server binds only to `127.0.0.1`. Connections require a pairing token; production mode also checks an exact extension ID allowlist. Tab titles and URLs are returned as metadata and may be sensitive. Do not record or share tool results without considering their contents.
+The WebSocket server binds to `127.0.0.1` by default. Optional LAN binding accepts one RFC1918 IPv4 address and requires TLS certificate and private-key files; wildcard addresses and unencrypted LAN connections are rejected. The companion extension must connect to the matching `wss://` URL and trust its certificate. Connections still require a pairing token, and production mode checks an exact extension ID allowlist. See the [browser integration guide](docs/browser-integration.md) for configuration and verification limits.
 
 ## Development
 
-```powershell
+```bash
 npm test
 npm run typecheck
 npm run build
@@ -88,4 +88,5 @@ For development mode, start the daemon with `npm run dev -- daemon`. Development
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the
+[MIT License](LICENSE).

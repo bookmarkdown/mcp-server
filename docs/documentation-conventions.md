@@ -48,19 +48,19 @@ ms.topic: reference
 * 不在文件、範例或截圖中放入有效 pairing token、存取憑證或個人資料。Token 僅以虛構佔位值或安全產生方式示範。
 * 明確提醒分頁標題與 URL 可能含敏感資訊；不得把頁面內容、實際標題/URL 或敏感 payload 複製到文件或測試報告。
 * 說明 incognito 視窗/分頁的排除責任屬於 extension；除非 server 已能驗證，文件不可暗示 server 能自行保證 extension 回傳資料。
-* 說明 loopback 綁定位址、配對認證及未驗證的瀏覽器權限/整合邊界，不把 Origin 格式描述為認證。
+* 說明預設 loopback 與選用 RFC1918 WSS 綁定、配對認證及未驗證的瀏覽器權限/整合邊界，不把 Origin 格式描述為認證。
 
 ## 瀏覽器整合文件必備方向
 
 `docs/browser-integration.md` 是 browser integration contract 的專屬文件。它應說明目前已實作的串接方式和限制，而不是把整合描述成待完成計畫。內容至少涵蓋以下方向：
 
 1. **範圍與參與者**：server、companion extension、MCP host 各自負責的程序、連線和功能；指出 extension 所屬 repository 及支援的 OS/瀏覽器範圍。
-2. **連線與信任邊界**：loopback address/port、WebSocket path、Host/Origin 驗證、extension ID allowlist、pairing token 的設定責任，以及 token 不可使用的傳遞位置。
+2. **連線與信任邊界**：預設 loopback 或選用的 RFC1918 WSS address/port、TLS 憑證信任、WebSocket path、Host/Origin 驗證、extension ID allowlist、pairing token 的設定責任，以及 token 不可使用的傳遞位置。
 3. **連線生命週期**：connect、hello/ack、probe、註冊/解除註冊、heartbeat 或 liveness（若有）、reconnect、daemon restart 與 shutdown 行為。
 4. **協定與相容性**：protocol version、必填/選填欄位、strict schema、capabilities、限制值、request ID 關聯、成功/拒絕範例，以及版本不相容的處理。
 5. **Browser operations**：每個 MCP tool 對應的 extension operation、輸入/輸出、normal/incognito 視窗範圍、分頁 metadata 邊界、權限要求，以及開啟/關閉/移動等副作用操作的結果不明與重送規則。
 6. **錯誤與資源限制**：upgrade/hello/auth/schema 錯誤、timeout、disconnect、取消、payload/連線/pending-request 上限和安全錯誤回覆。
-7. **安全與隱私**：配對 token 管理、loopback 限制、頁面內容不讀取、tab title/URL 敏感性、incognito 排除責任及不可記錄的資料。
+7. **安全與隱私**：配對 token 管理、loopback/LAN TLS 限制、頁面內容不讀取、tab title/URL 敏感性、incognito 排除責任及不可記錄的資料。
 8. **設定與操作方式**：必要及選用設定、預設值、範圍、daemon/proxy 啟動責任，以及 MCP host 如何啟動 proxy；範例須符合目前 CLI 和 extension contract。
 9. **測試與狀態證據**：分開說明 server contract tests、extension tests、真實 Chrome/extension tests 和指定 MCP host tests。記錄實際完成的測試與環境版本；未覆蓋的組合標示 `not verified`，不可用單元測試推論真實瀏覽器相容性。
 10. **維護與文件連結**：指出 contract 的 source schema、operation implementation、相鄰測試、features/architecture 文件，以及跨 repository 變更時要同步檢查的版本。
