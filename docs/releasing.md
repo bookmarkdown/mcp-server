@@ -1,7 +1,7 @@
 ---
 title: "Release Process"
 description: "BookMarkdown MCP server 的 GitFlow、Changesets 版本管理與 npm 發布流程。"
-ms.date: 2026-09-29
+ms.date: 2026-09-30
 ms.topic: how-to
 ---
 
@@ -9,7 +9,7 @@ ms.topic: how-to
 
 `@bookmarkdown/mcp-server@0.1.3` is published on npm and is the current `latest` version. It remains Windows-only; the current source adds Linux support. Clean Windows and Linux package installation smoke tests are pending, so the public README points Linux users to source installation. The README snapshot on npm predates publication and must be updated in a later version after the smoke tests pass.
 
-The repository contains a Linux/Windows CI matrix, Ubuntu Changesets workflow, and Ubuntu tag-publishing workflow. The project uses the MIT license. The `develop` branch, branch protection rules, npm trusted publisher, and protected `npm` GitHub environment still require maintainer setup.
+The repository contains a Linux/Windows CI matrix, Ubuntu Changesets workflow, and Ubuntu tag-publishing workflow. The project uses the MIT license, and the `develop` branch exists. Before the next release, verify branch protection, GitHub Actions pull request permissions, the npm trusted publisher, and the protected `npm` GitHub environment.
 
 ## Branch model
 
@@ -46,6 +46,27 @@ Changes that do not affect the npm artifact do not need a Changeset. When uncert
 7. Merge `main` back into `develop` so release-only changes are retained.
 
 The publish workflow skips the publish command when that exact package version is already in the registry. This allowed the first release to be published manually before configuring Trusted Publishing and prevents a duplicate publish when the same version is checked again. An unpublished package is not available through `npx`.
+
+## Publishing the Linux-capable version
+
+The npm `latest` version is `0.1.3` and supports Windows only. The Linux support change is a `minor` Changeset, so its expected version is `0.2.0` when applied to `0.1.3`. Do not reuse or move the already-published `v0.1.3` tag.
+
+The release is blocked by branch version drift. At this checkpoint, `main` contains package version `0.1.3` and `.changeset/linux-lan-support.md`, while `develop` and the remote `changeset-release/develop` branch still contain package version `0.1.1`. The Changesets workflow runs only on pushes to `develop`.
+
+1. Merge `main` into `develop` through a reviewed pull request. Confirm that `develop` now contains package version `0.1.3` and the Linux support Changeset. Do not merge a generated version pull request that is still based on `0.1.1`; it would propose a version below the published `0.1.3`.
+2. After the merge reaches `develop`, let the Changesets workflow create or update its version pull request. Review that it proposes `0.2.0` and updates `package.json`, `package-lock.json`, and `CHANGELOG.md`. Do not edit the package version manually.
+3. After merging the version pull request into `develop`, follow release steps 2 and 3 above using `release/0.2.0`. Run the Linux and Windows CI checks, and install the packed tarball in clean Linux and Windows environments. `npm run verify:pack` checks archive contents but does not install or run the package. Update the public README installation status after the tarball smoke tests pass.
+4. Merge the release pull request into `main`. Confirm that `package.json` reports `0.2.0`, then create and push the tag from the merged `main` commit:
+
+   ```bash
+   git switch main
+   git pull --ff-only origin main
+   git tag -a v0.2.0 -m "Release v0.2.0"
+   git push origin v0.2.0
+   ```
+
+   Pushing the tag starts the publish workflow. Confirm it succeeds and that `npm view @bookmarkdown/mcp-server version` reports `0.2.0`; do not run `npm publish` manually while the workflow is publishing.
+5. Merge `main` back into `develop` after the release so both branches retain the published version and release-only changes.
 
 ## First-release setup
 
