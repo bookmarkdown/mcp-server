@@ -53,15 +53,21 @@ jobs:
         shell: pwsh
         run: |
           $version = node -p "require('./package.json').version"
-          $publishedVersion = npm view "@bookmarkdown/mcp-server@$version" version --json 2>$null
-          if ($LASTEXITCODE -eq 0) {
-            $publishedVersion = ($publishedVersion -join "`n") | ConvertFrom-Json
+          $packageName = node -p "require('./package.json').name"
+          $registryName = $packageName.Replace('/', '%2f')
+          $registryUrl = "https://registry.npmjs.org/$registryName/$version"
+          $response = Invoke-WebRequest -Uri $registryUrl -SkipHttpErrorCheck
+
+          if ($response.StatusCode -eq 404) {
+            "already-published=false" >> $env:GITHUB_OUTPUT
+          } elseif ($response.StatusCode -eq 200) {
+            $publishedVersion = ($response.Content | ConvertFrom-Json).version
             if ($publishedVersion -ne $version) {
               throw "Registry returned unexpected version: $publishedVersion"
             }
             "already-published=true" >> $env:GITHUB_OUTPUT
           } else {
-            "already-published=false" >> $env:GITHUB_OUTPUT
+            throw "npm registry returned HTTP $($response.StatusCode) while checking version $version."
           }
       - name: Publish package with npm trusted publishing
         if: steps.registry.outputs.already-published != 'true'
