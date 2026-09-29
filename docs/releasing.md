@@ -49,6 +49,9 @@ Changes that do not affect the npm artifact do not need a Changeset. When uncert
 
 ## Release steps
 
+日常 branch、push、pull request 與 tag 的逐步命令請參閱
+[推送與發布流程](pushing.md)。
+
 1. Create one short-lived branch from `main`. Add the implementation, tests,
    documentation, and Changeset in the same pull request.
 2. Run `npm test`, `npm run typecheck`, and `npm run verify:pack` locally. Push
