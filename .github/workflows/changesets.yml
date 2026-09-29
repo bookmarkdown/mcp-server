@@ -10,6 +10,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
+  actions: write
   contents: write
   pull-requests: write
 
@@ -28,9 +29,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Create or update version pull request
+        id: changesets
         uses: changesets/action@v1
         env:
           HOME: ${{ runner.temp }}
         with:
           version: npm run version-packages
           branch: main
+      - name: Run CI for version branch
+        if: steps.changesets.outputs.hasChangesets == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run ci.yml --ref changeset-release/main
