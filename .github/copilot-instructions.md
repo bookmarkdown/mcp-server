@@ -6,7 +6,7 @@ ms.date: 2026-09-28
 
 ## 專案範圍
 
-本 repository 負責 BookMarkdown MCP server 與其獨立的 loopback WebSocket server。MCP host 透過 stdio 啟動此程序；另一個 repository 的 browser extension 是 WebSocket client。
+本 repository 負責 BookMarkdown MCP server 與其獨立的 loopback 或 TLS 保護的私有區網 WebSocket server。MCP host 透過 stdio 啟動此程序；另一個 repository 的 browser extension 是 WebSocket client。
 
 * 不要在本 repository 實作或修改 Chrome extension、manifest、service worker、options UI 或 extension 權限。
 * 不要新增假 MV3 extension 作為測試工具。WebSocket 行為使用一般 JavaScript/Node.js client 驗證。
@@ -18,7 +18,7 @@ ms.date: 2026-09-28
 
 * MCP transport 使用 `@modelcontextprotocol/server` v2 的 `serveStdio(factory)`。不要改用會限制協定年代的低階 stdio transport，除非使用者明確要求並補上相容性測試。
 * MCP stdout 只輸出協定訊息；診斷、啟動狀態與錯誤寫到 stderr。
-* WebSocket 是獨立的應用層 RPC channel，不是 MCP transport。預設只綁定 `127.0.0.1:38471`，不得對外網卡監聽、掃描替代 port，或連到占用 port 的其他程序。
+* WebSocket 是獨立的應用層 RPC channel，不是 MCP transport。預設只綁定 `127.0.0.1:38471`。只有明確設定單一 RFC1918 IPv4 位址並同時提供 TLS certificate/key 時才允許私有區網綁定；不得使用 wildcard 或公開網路位址，也不得掃描替代 port 或連到占用 port 的其他程序。
 * port 占用或 bridge 設定失效時，MCP stdio 仍須可用；依賴 extension 的工具回傳有限且明確的錯誤。
 * `npm start` 與套件 CLI 未提供子命令時預設啟動 production daemon；`npm start -- proxy` 啟動 MCP proxy。`npm run dev -- daemon` 明確使用 development。不要從 `NODE_ENV` 推斷 runtime mode。
 * WebSocket Origin 在兩種模式都必須符合 `chrome-extension://[a-p]{32}`，hello extension ID 必須等於 Origin ID，並通過 pairing token 驗證。Production 另外要求精確符合 `BOOKMARKDOWN_EXTENSION_IDS`；development 不使用固定 ID allowlist。Origin 不是認證；不得把 token 放進 URL、命令列參數、log、MCP 回覆或 source control。
@@ -40,12 +40,12 @@ Extension 必須在計數與清單中排除 incognito 視窗和分頁；server �
 
 ## 實作與驗證
 
-* 使用 Node.js `24.11.0` 或更新版本，使用 npm 與 `package-lock.json`；變更 dependencies 時同步更新 lockfile。
+* 使用 Node.js `24.11.0` 或更新版本，使用 npm 與 `package-lock.json`；變更 dependencies 時同步更新 lockfile。Source checkout 支援 Windows 與 Linux；IPC 分別使用 Named Pipe 與 Unix domain socket。
 * 安裝後可執行 `npm test`、`npm run typecheck`、`npm run build`。`npm test` 會先 build 再執行 `node:test`。
 * 新增或修改 WebSocket 行為時，使用一般 Node.js WebSocket client 測試握手、驗證、request/response 關聯、逾時、斷線、限制與 MCP 結果。測試不得依賴 Chrome 或未實作的 extension。
 * 每次修改後先跑能檢查該行為的窄測試，再依風險執行完整測試、typecheck 和 build。不要宣稱未執行的檢查已通過。
-* 保留 `127.0.0.1` 綁定、stdout/stderr 分工和 fail-closed 認證。不得在錯誤訊息或 log 印出 pairing token、敏感 URL 或頁面內容。
-* `@bookmarkdown/mcp-server@0.1.3` 已發布至 npm，registry metadata 已確認；乾淨 Windows 安裝與 `npx` smoke test 尚未驗證。下一版前須確認 npm Trusted Publisher 設定可讓 workflow 透過 OIDC 發布。除非使用者明確要求，不得執行實際發布。
+* 保留 loopback 預設綁定；非 loopback 綁定僅允許明確設定的 RFC1918 IPv4 並要求 TLS。維持 stdout/stderr 分工和 fail-closed 認證。不得在錯誤訊息或 log 印出 pairing token、敏感 URL 或頁面內容。
+* `@bookmarkdown/mcp-server@0.1.3` 已發布至 npm 且僅支援 Windows；目前 source checkout 支援 Linux。乾淨 Windows/Linux 套件安裝與 `npx` smoke test 尚未驗證。下一版前須確認 npm Trusted Publisher 設定可讓 workflow 透過 OIDC 發布。除非使用者明確要求，不得執行實際發布。
 
 ## 文件維護
 

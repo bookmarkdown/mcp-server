@@ -19,11 +19,10 @@ import {
   listenLocalPipe,
 } from '../dist/ipc/transport.js';
 
-const windowsOnly = {
-  skip:
-    process.platform === 'win32'
-      ? false
-      : 'Daemon lifecycle tests require Windows Named Pipes.',
+const supportedPlatforms = {
+  skip: !['win32', 'linux'].includes(process.platform)
+    ? 'Daemon lifecycle tests require Windows or Linux local IPC.'
+    : false,
 };
 const extensionId = 'a'.repeat(32);
 const token = '0123456789abcdef0123456789abcdef0123456789abcdef';
@@ -264,7 +263,7 @@ function countTabsResponse(requestId) {
 
 test(
   'starts both listeners and serves hello, health, and tools/call',
-  windowsOnly,
+  supportedPlatforms,
   async (t) => {
     const { daemon, pipeName, port } = await startTestDaemon(t);
     assert.equal(daemon.status, 'ready');
@@ -311,7 +310,7 @@ test(
 
 test(
   'rejects invalid startup and rolls back listeners on WebSocket or IPC failure',
-  windowsOnly,
+  supportedPlatforms,
   async () => {
     await assert.rejects(
       startDaemon({
@@ -357,7 +356,7 @@ test(
 
 test(
   'reports version mismatches and detects a healthy duplicate at client capacity',
-  windowsOnly,
+  supportedPlatforms,
   async (t) => {
     const { daemon, env, pipeName, signalTarget } = await startTestDaemon(t, {
       BOOKMARKDOWN_MAX_CONNECTIONS: '1',
@@ -370,12 +369,14 @@ test(
     });
     assert.equal(packageMismatch.helloResponse.status, 'package_version_mismatch');
     await waitForClose(packageMismatch.socket);
+    await waitForCondition(() => daemon.clientCount === 1);
 
     const protocolMismatch = await connectDaemon(pipeName, {
       protocolVersion: IPC_PROTOCOL_VERSION + 1,
     });
     assert.equal(protocolMismatch.helloResponse.status, 'protocol_version_mismatch');
     await waitForClose(protocolMismatch.socket);
+    await waitForCondition(() => daemon.clientCount === 1);
 
     const duplicate = await startDaemon({ env, pipeName, signalTarget });
     assert.deepEqual(duplicate, { status: 'already_running' });
@@ -412,7 +413,7 @@ test(
 
 test(
   'does not treat a healthy daemon in another runtime mode as a duplicate',
-  windowsOnly,
+  supportedPlatforms,
   async (t) => {
     const { daemon, env, pipeName } = await startTestDaemon(t, {}, {
       runtimeMode: 'development',
@@ -448,7 +449,7 @@ test(
 
 test(
   'bounds pending calls, supports cancellation, and drains on SIGINT',
-  windowsOnly,
+  supportedPlatforms,
   async (t) => {
     const { daemon, pipeName, port, signalTarget } = await startTestDaemon(t, {
       BOOKMARKDOWN_MAX_PENDING_REQUESTS: '1',
@@ -539,7 +540,7 @@ test(
 
 test(
   'closes incomplete HTTP headers within the drain window and releases both listeners',
-  windowsOnly,
+  supportedPlatforms,
   async (t) => {
     const { daemon, pipeName, port } = await startTestDaemon(t, {}, {
       shutdownDrainMs: 50,
@@ -575,7 +576,7 @@ test(
   },
 );
 
-test('rejects unsupported runtime modes before opening either listener', windowsOnly, async () => {
+test('rejects unsupported runtime modes before opening either listener', supportedPlatforms, async () => {
   for (const runtimeMode of ['staging', null]) {
     const port = await reservePort();
     const pipeName = uniquePipeName();
@@ -595,7 +596,7 @@ test('rejects unsupported runtime modes before opening either listener', windows
   }
 });
 
-test('bounds a duplicate probe on an occupied pipe before binding WebSocket', windowsOnly, async () => {
+test('bounds a duplicate probe on an occupied pipe before binding WebSocket', supportedPlatforms, async () => {
   const pipeName = uniquePipeName();
   const port = await reservePort();
   const server = await listenLocalPipe(pipeName, () => {}, () => {});

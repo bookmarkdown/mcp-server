@@ -1,5 +1,15 @@
 import { timingSafeEqual } from 'node:crypto';
-import { createServer, type IncomingMessage, type Server } from 'node:http';
+import { readFileSync } from 'node:fs';
+import {
+  createServer as createHttpServer,
+  type IncomingMessage,
+  type Server as HttpServer,
+  type ServerResponse,
+} from 'node:http';
+import {
+  createServer as createHttpsServer,
+  type Server as HttpsServer,
+} from 'node:https';
 import type { Duplex } from 'node:stream';
 import { WebSocket, WebSocketServer } from 'ws';
 import type { BridgeConfig } from '../config.js';
@@ -11,10 +21,8 @@ import {
   rawDataToBuffer,
 } from './protocol.js';
 
-const LOOPBACK_HOST = '127.0.0.1';
-
-export class LoopbackWebSocketServer {
-  readonly #httpServer: Server;
+export class WebSocketBridgeServer {
+  readonly #httpServer: HttpServer | HttpsServer;
   readonly #webSocketServer: WebSocketServer;
   readonly #extensionIds: Set<string>;
   #boundPort: number | undefined;
@@ -29,14 +37,24 @@ export class LoopbackWebSocketServer {
       maxPayload: config.maxPayloadBytes,
       perMessageDeflate: false,
     });
-    this.#httpServer = createServer((_request, response) => {
+    const requestHandler = (_request: IncomingMessage, response: ServerResponse) => {
       response.writeHead(404, { connection: 'close' });
       response.end();
-    });
+    };
+    const tlsOptions = config.tlsCertFile && config.tlsKeyFile
+      ? {
+          cert: readFileSync(config.tlsCertFile),
+          key: readFileSync(config.tlsKeyFile),
+          minVersion: 'TLSv1.2' as const,
+        }
+      : undefined;
+    this.#httpServer = tlsOptions
+      ? createHttpsServer(tlsOptions, requestHandler)
+      : createHttpServer(requestHandler);
 
     this.#httpServer.on('upgrade', (request, socket, head) => {
       const extensionId = this.#extensionIdFromOrigin(request.headers.origin);
-      const expectedHost = `127.0.0.1:${this.#boundPort}`;
+      const expectedHost = `${this.config.host}:${this.#boundPort}`;
       if (
         request.url !== '/' ||
         request.headers.host !== expectedHost ||
@@ -74,12 +92,12 @@ export class LoopbackWebSocketServer {
     return this.#boundPort;
   }
 
-  // 在本機 loopback 位址啟動 WebSocket 使用的 HTTP listener。
+  // 在設定的位址啟動 WebSocket 使用的 HTTP(S) listener。
   public async listen(): Promise<number> {
     await new Promise<void>((resolve, reject) => {
       const onError = (error: Error) => reject(error);
       this.#httpServer.once('error', onError);
-      this.#httpServer.listen(this.config.port, LOOPBACK_HOST, () => {
+      this.#httpServer.listen(this.config.port, this.config.host, () => {
         this.#httpServer.off('error', onError);
         resolve();
       });
@@ -87,7 +105,7 @@ export class LoopbackWebSocketServer {
 
     const address = this.#httpServer.address();
     if (!address || typeof address === 'string') {
-      throw new Error('The loopback WebSocket listener did not expose a TCP address.');
+      throw new Error('The WebSocket listener did not expose a TCP address.');
     }
 
     this.#boundPort = address.port;

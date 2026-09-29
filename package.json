@@ -31,7 +31,8 @@
     "node": ">=24.11.0"
   },
   "os": [
-    "win32"
+    "win32",
+    "linux"
   ],
   "publishConfig": {
     "access": "public"

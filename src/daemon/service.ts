@@ -169,6 +169,15 @@ export class DaemonService {
     return this.#bridge.port;
   }
 
+  public get webSocketUrl(): string {
+    const port = this.webSocketPort;
+    if (port === undefined) {
+      throw new Error('The WebSocket bridge is not listening.');
+    }
+    const scheme = this.#config.tlsCertFile ? 'wss' : 'ws';
+    return `${scheme}://${this.#config.host}:${port}/`;
+  }
+
   public get clientCount(): number {
     return this.#clients.size;
   }

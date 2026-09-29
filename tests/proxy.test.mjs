@@ -1,22 +1,24 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { mkdir } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
+import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { IpcClient } from '../dist/ipc/client.js';
 import { IPC_PROTOCOL_VERSION } from '../dist/ipc/protocol.js';
+import { getLocalPipePath } from '../dist/ipc/transport.js';
 
 const packageMetadata = createRequire(import.meta.url)('../package.json');
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const proxyServiceUrl = new URL('../src/proxy/service.ts', import.meta.url).href;
 const localPackageVersion = packageMetadata.version;
-const windowsOnly = {
-  skip:
-    process.platform === 'win32'
-      ? false
-      : 'Named Pipe proxy tests require Windows.',
+const supportedPlatforms = {
+  skip: !['win32', 'linux'].includes(process.platform)
+    ? 'Proxy tests require Windows or Linux local IPC.'
+    : false,
 };
 
 function uniquePipeName() {
@@ -24,7 +26,7 @@ function uniquePipeName() {
 }
 
 function pipePath(pipeName) {
-  return `\\\\.\\pipe\\${pipeName}`;
+  return getLocalPipePath(pipeName);
 }
 
 function encodeFrame(message) {
@@ -190,9 +192,13 @@ async function startFakeDaemon(t, pipeName, options = {}) {
     socket.destroy();
   }
 
+  const endpointPath = pipePath(pipeName);
+  if (process.platform === 'linux') {
+    await mkdir(dirname(endpointPath), { recursive: true, mode: 0o700 });
+  }
   await new Promise((resolve, reject) => {
     server.once('error', reject);
-    server.listen(pipePath(pipeName), resolve);
+    server.listen(endpointPath, resolve);
   });
 
   const daemon = {
@@ -443,7 +449,7 @@ function assertToolError(result, code) {
 
 test(
   'initializes and lists the shared browser catalog offline with MCP-only stdout',
-  windowsOnly,
+  supportedPlatforms,
   async (t) => {
     const client = startProxyClient(uniquePipeName());
     t.after(() => client.close());
@@ -470,7 +476,7 @@ test(
 
 test(
   'forwards new browser tools through MCP and validates their IPC results',
-  windowsOnly,
+  supportedPlatforms,
   async (t) => {
     const pipeName = uniquePipeName();
     const daemon = await startFakeDaemon(t, pipeName);
@@ -542,7 +548,7 @@ test(
 
 test(
   'returns unavailable offline and reconnects on a later call without restarting the proxy',
-  windowsOnly,
+  supportedPlatforms,
   async (t) => {
     const pipeName = uniquePipeName();
     const client = startProxyClient(pipeName);
@@ -568,7 +574,7 @@ test(
 
 test(
   'connects to a development daemon without imposing a proxy runtime mode',
-  windowsOnly,
+  supportedPlatforms,
   async (t) => {
     const pipeName = uniquePipeName();
     const daemon = await startFakeDaemon(t, pipeName, {
@@ -589,7 +595,7 @@ test(
 
 test(
   'distinguishes an offline extension from an unavailable daemon',
-  windowsOnly,
+  supportedPlatforms,
   async (t) => {
     const pipeName = uniquePipeName();
     const daemon = await startFakeDaemon(t, pipeName, {
@@ -611,7 +617,7 @@ test(
 
 test(
   'forwards cancellation and clears the pending call for later work',
-  windowsOnly,
+  supportedPlatforms,
   async (t) => {
     const pipeName = uniquePipeName();
     const daemon = await startFakeDaemon(t, pipeName, {
@@ -662,7 +668,7 @@ test(
   },
 );
 
-test('times out a dispatched call, ignores its late reply, and serves a later call', windowsOnly, async (t) => {
+test('times out a dispatched call, ignores its late reply, and serves a later call', supportedPlatforms, async (t) => {
   const pipeName = uniquePipeName();
   const daemon = await startFakeDaemon(t, pipeName, {
     onCall(call) {
@@ -686,7 +692,7 @@ test('times out a dispatched call, ignores its late reply, and serves a later ca
   client.assertProtocolOnlyStdout();
 });
 
-test('keeps errors and cancellations isolated across proxy sessions', windowsOnly, async (t) => {
+test('keeps errors and cancellations isolated across proxy sessions', supportedPlatforms, async (t) => {
   const pipeName = uniquePipeName();
   const daemon = await startFakeDaemon(t, pipeName, { onCall() {} });
   const first = startProxyClient(pipeName);
@@ -718,7 +724,7 @@ test('keeps errors and cancellations isolated across proxy sessions', windowsOnl
 
 test(
   'does not replay a side-effecting call after dispatch disconnect',
-  windowsOnly,
+  supportedPlatforms,
   async (t) => {
     const pipeName = uniquePipeName();
     const daemon = await startFakeDaemon(t, pipeName, {
@@ -760,7 +766,7 @@ test(
 
 test(
   'reports version mismatch with manual restart guidance and recovers only with a matching daemon',
-  windowsOnly,
+  supportedPlatforms,
   async (t) => {
     const pipeName = uniquePipeName();
     const client = startProxyClient(pipeName);
@@ -800,7 +806,7 @@ test(
 
 test(
   'keeps concurrent calls from separate proxy sessions isolated',
-  windowsOnly,
+  supportedPlatforms,
   async (t) => {
     const pipeName = uniquePipeName();
     const daemon = await startFakeDaemon(t, pipeName);
@@ -826,7 +832,7 @@ test(
   },
 );
 
-test('bounds an unresponsive pre-hello daemon and recovers without dispatching the first call', windowsOnly, async (t) => {
+test('bounds an unresponsive pre-hello daemon and recovers without dispatching the first call', supportedPlatforms, async (t) => {
   const pipeName = uniquePipeName();
   let stalled = true;
   const daemon = await startFakeDaemon(t, pipeName, { ignoreHello: () => stalled });
@@ -852,7 +858,7 @@ test('bounds an unresponsive pre-hello daemon and recovers without dispatching t
   assert.equal(daemon.calls.length, 1);
 });
 
-test('cancels a pre-hello proxy call and closes the establishing socket', windowsOnly, async (t) => {
+test('cancels a pre-hello proxy call and closes the establishing socket', supportedPlatforms, async (t) => {
   const pipeName = uniquePipeName();
   const daemon = await startFakeDaemon(t, pipeName, { ignoreHello: () => true });
   const client = new IpcClient({

@@ -1,8 +1,13 @@
+import { isIP } from 'node:net';
+
 export type RuntimeMode = 'development' | 'production';
 
 export interface BridgeConfig {
   runtimeMode: RuntimeMode;
+  host: string;
   port: number;
+  tlsCertFile?: string;
+  tlsKeyFile?: string;
   token: string;
   extensionIds: string[];
   maxPayloadBytes: number;
@@ -18,6 +23,7 @@ export type BridgeConfigResult =
   | { ok: false; reason: string };
 
 const defaults = {
+  host: '127.0.0.1',
   port: 38471,
   maxPayloadBytes: 64 * 1024,
   maxPendingRequests: 32,
@@ -52,6 +58,29 @@ export function parseBridgeConfig(
 ): BridgeConfigResult {
   if (runtimeMode !== 'production' && runtimeMode !== 'development') {
     return { ok: false, reason: 'Runtime mode must be production or development.' };
+  }
+
+  const host = env.BOOKMARKDOWN_WS_HOST ?? defaults.host;
+  if (host !== defaults.host && !isPrivateIpv4Address(host)) {
+    return {
+      ok: false,
+      reason: 'BOOKMARKDOWN_WS_HOST must be 127.0.0.1 or a private RFC1918 IPv4 address.',
+    };
+  }
+
+  const tlsCertFile = env.BOOKMARKDOWN_WS_TLS_CERT_FILE?.trim();
+  const tlsKeyFile = env.BOOKMARKDOWN_WS_TLS_KEY_FILE?.trim();
+  if (Boolean(tlsCertFile) !== Boolean(tlsKeyFile)) {
+    return {
+      ok: false,
+      reason: 'BOOKMARKDOWN_WS_TLS_CERT_FILE and BOOKMARKDOWN_WS_TLS_KEY_FILE must be configured together.',
+    };
+  }
+  if (host !== defaults.host && (!tlsCertFile || !tlsKeyFile)) {
+    return {
+      ok: false,
+      reason: 'LAN WebSocket bindings require a TLS certificate and private key.',
+    };
   }
 
   const token = env.BOOKMARKDOWN_BRIDGE_TOKEN;
@@ -159,7 +188,9 @@ export function parseBridgeConfig(
     ok: true,
     config: {
       runtimeMode,
+      host,
       port: port as number,
+      ...(tlsCertFile && tlsKeyFile ? { tlsCertFile, tlsKeyFile } : {}),
       token,
       extensionIds: [...new Set(extensionIds)],
       maxPayloadBytes: maxPayloadBytes as number,
@@ -170,6 +201,17 @@ export function parseBridgeConfig(
       helloTimeoutMs: helloTimeoutMs as number,
     },
   };
+}
+
+function isPrivateIpv4Address(address: string): boolean {
+  if (isIP(address) !== 4) {
+    return false;
+  }
+  const octets = address.split('.').map(Number);
+  const [firstOctet, secondOctet] = octets;
+  return firstOctet === 10 ||
+    (firstOctet === 172 && secondOctet >= 16 && secondOctet <= 31) ||
+    (firstOctet === 192 && secondOctet === 168);
 }
 
 export const defaultBridgeLimits = {

@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { createServer as createNetServer } from 'node:net';
+import { networkInterfaces, tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 import { WebSocket } from 'ws';
 import { IpcClient } from '../dist/ipc/client.js';
@@ -14,11 +18,10 @@ const unlistedExtensionId = 'c'.repeat(32);
 const token = '0123456789abcdef0123456789abcdef0123456789abcdef';
 const instanceId = '7d8c2f92-12c8-4bd2-9701-12e602deaf01';
 const secondInstanceId = '9f35a930-b515-47e3-8bb5-c454f8de8c55';
-const windowsOnly = {
-  skip:
-    process.platform === 'win32'
-      ? false
-      : 'Daemon bridge tests require Windows Named Pipes.',
+const supportedPlatforms = {
+  skip: !['win32', 'linux'].includes(process.platform)
+    ? 'Daemon bridge tests require Windows or Linux local IPC.'
+    : false,
 };
 
 function uniquePipeName() {
@@ -44,6 +47,9 @@ function makeEnvironment(port, overrides = {}) {
     maxRegisteredInstances: 'BOOKMARKDOWN_MAX_REGISTERED_INSTANCES',
     requestTimeoutMs: 'BOOKMARKDOWN_REQUEST_TIMEOUT_MS',
     helloTimeoutMs: 'BOOKMARKDOWN_HELLO_TIMEOUT_MS',
+    host: 'BOOKMARKDOWN_WS_HOST',
+    tlsCertFile: 'BOOKMARKDOWN_WS_TLS_CERT_FILE',
+    tlsKeyFile: 'BOOKMARKDOWN_WS_TLS_KEY_FILE',
   };
   for (const [setting, value] of Object.entries(overrides)) {
     const environmentName = settingNames[setting];
@@ -86,11 +92,11 @@ async function startDaemonForTest(t, overrides = {}, options = {}) {
   return { client, daemon: daemonResult.daemon, pipeName, port };
 }
 
-async function reservePort() {
+async function reservePort(host = '127.0.0.1') {
   const server = createNetServer();
   await new Promise((resolve, reject) => {
     server.once('error', reject);
-    server.listen(0, '127.0.0.1', resolve);
+    server.listen(0, host, resolve);
   });
   const address = server.address();
   assert.ok(address && typeof address !== 'string');
@@ -98,6 +104,29 @@ async function reservePort() {
     server.close((error) => (error ? reject(error) : resolve()));
   });
   return address.port;
+}
+
+function privateIpv4Address() {
+  for (const interfaces of Object.values(networkInterfaces())) {
+    const address = interfaces?.find((entry) =>
+      entry &&
+      !entry.internal &&
+      (entry.family === 'IPv4' || entry.family === 4) &&
+      isPrivateIpv4Address(entry.address),
+    )?.address;
+    if (address) {
+      return address;
+    }
+  }
+  return undefined;
+}
+
+function isPrivateIpv4Address(address) {
+  const octets = address.split('.').map(Number);
+  const [firstOctet, secondOctet] = octets;
+  return firstOctet === 10 ||
+    (firstOctet === 172 && secondOctet >= 16 && secondOctet <= 31) ||
+    (firstOctet === 192 && secondOctet === 168);
 }
 
 function waitForOpen(socket) {
@@ -208,7 +237,7 @@ function browserSuccessResponse(requestId, data) {
   });
 }
 
-test('fails daemon startup when the configured WebSocket port is occupied', windowsOnly, async () => {
+test('fails daemon startup when the configured WebSocket port is occupied', supportedPlatforms, async () => {
   const occupied = createNetServer();
   await new Promise((resolve, reject) => {
     occupied.once('error', reject);
@@ -234,7 +263,92 @@ test('fails daemon startup when the configured WebSocket port is occupied', wind
   }
 });
 
-test('routes a daemon tool call through the proposal-shaped WebSocket RPC', windowsOnly, async (t) => {
+test('rejects wildcard and unencrypted LAN WebSocket bindings', supportedPlatforms, async () => {
+  const port = await reservePort();
+  const signalTarget = new EventEmitter();
+  await assert.rejects(
+    startDaemon({
+      env: makeEnvironment(port, { host: '0.0.0.0' }),
+      pipeName: uniquePipeName(),
+      signalTarget,
+    }),
+    /BOOKMARKDOWN_WS_HOST must be 127\.0\.0\.1 or a private RFC1918 IPv4 address/,
+  );
+  await assert.rejects(
+    startDaemon({
+      env: makeEnvironment(port, { host: '192.168.1.10' }),
+      pipeName: uniquePipeName(),
+      signalTarget,
+    }),
+    /LAN WebSocket bindings require a TLS certificate and private key/,
+  );
+});
+
+test('serves an authenticated WSS bridge on a private LAN address', {
+  skip: process.platform !== 'linux',
+}, async (t) => {
+  const host = privateIpv4Address();
+  if (!host) {
+    t.skip('No private IPv4 interface is available.');
+    return;
+  }
+
+  const certificateDirectory = await mkdtemp(join(tmpdir(), 'bmd-wss-test-'));
+  const certificateFile = join(certificateDirectory, 'cert.pem');
+  const privateKeyFile = join(certificateDirectory, 'key.pem');
+  let daemon;
+  let socket;
+  t.after(async () => {
+    socket?.terminate();
+    await daemon?.close();
+    await rm(certificateDirectory, { recursive: true, force: true });
+  });
+  execFileSync('openssl', [
+    'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
+    '-keyout', privateKeyFile,
+    '-out', certificateFile,
+    '-days', '1',
+    '-subj', '/CN=BookMarkdown test',
+  ], { stdio: 'ignore' });
+
+  const port = await reservePort(host);
+  const env = makeEnvironment(port, {
+    host,
+    tlsCertFile: certificateFile,
+    tlsKeyFile: privateKeyFile,
+  });
+  const result = await startDaemon({
+    env,
+    pipeName: uniquePipeName(),
+    signalTarget: new EventEmitter(),
+  });
+  assert.equal(result.status, 'started');
+  if (result.status !== 'started') {
+    throw new Error('Expected a newly started daemon.');
+  }
+  daemon = result.daemon;
+
+  socket = new WebSocket(daemon.webSocketUrl, {
+    origin: `chrome-extension://${extensionId}`,
+    rejectUnauthorized: false,
+  });
+  await waitForOpen(socket);
+  const acknowledgement = nextMessage(socket);
+  socket.send(JSON.stringify({
+    type: 'hello',
+    protocolVersion: '2',
+    token,
+    appId: 'bmd-extension',
+    instanceId,
+    displayName: 'otter-fox-panda',
+    extensionId,
+    browser: 'chrome',
+    capabilities: { operations: ['browser.countOpenTabs'] },
+  }));
+  assert.equal(JSON.parse(await acknowledgement).ok, true);
+});
+
+test('routes a daemon tool call through the proposal-shaped WebSocket RPC', supportedPlatforms, async (t) => {
   const bridge = await startDaemonForTest(t);
   let socket;
 
@@ -277,7 +391,7 @@ test('routes a daemon tool call through the proposal-shaped WebSocket RPC', wind
   }
 });
 
-test('routes allowlisted browser operations with exact payloads and validated results', windowsOnly, async (t) => {
+test('routes allowlisted browser operations with exact payloads and validated results', supportedPlatforms, async (t) => {
   const bridge = await startDaemonForTest(t);
   const operations = [
     'browser.countOpenTabs',
@@ -367,7 +481,7 @@ test('routes allowlisted browser operations with exact payloads and validated re
   }
 });
 
-test('rejects an operation the connected instance did not advertise', windowsOnly, async (t) => {
+test('rejects an operation the connected instance did not advertise', supportedPlatforms, async (t) => {
   const bridge = await startDaemonForTest(t);
   const extension = await connectExtension(bridge, { instanceId });
 
@@ -378,7 +492,7 @@ test('rejects an operation the connected instance did not advertise', windowsOnl
   extension.socket.close();
 });
 
-test('rejects invalid pagination and mismatched tab-operation results', windowsOnly, async (t) => {
+test('rejects invalid pagination and mismatched tab-operation results', supportedPlatforms, async (t) => {
   const bridge = await startDaemonForTest(t);
   const extension = await connectExtension(bridge, {
     instanceId,
@@ -458,7 +572,7 @@ for (const runtimeMode of ['production', 'development']) {
     omitExtensionIds: runtimeMode === 'development',
   };
 
-  test(`rejects invalid Origins in ${runtimeMode} mode`, windowsOnly, async (t) => {
+  test(`rejects invalid Origins in ${runtimeMode} mode`, supportedPlatforms, async (t) => {
     const bridge = await startDaemonForTest(t, {}, modeOptions);
     const invalidOrigins = [
       'https://example.com',
@@ -470,7 +584,7 @@ for (const runtimeMode of ['production', 'development']) {
     }
   });
 
-  test(`requires the pairing token and matching hello ID in ${runtimeMode} mode`, windowsOnly, async (t) => {
+  test(`requires the pairing token and matching hello ID in ${runtimeMode} mode`, supportedPlatforms, async (t) => {
     const bridge = await startDaemonForTest(t, {}, modeOptions);
     const originExtensionId =
       runtimeMode === 'development' ? unlistedExtensionId : extensionId;
@@ -499,7 +613,7 @@ for (const runtimeMode of ['production', 'development']) {
   });
 }
 
-test('production rejects a valid extension ID outside its exact allowlist', windowsOnly, async (t) => {
+test('production rejects a valid extension ID outside its exact allowlist', supportedPlatforms, async (t) => {
   const bridge = await startDaemonForTest(t);
   assert.equal(
     await getUpgradeStatus(
@@ -510,7 +624,7 @@ test('production rejects a valid extension ID outside its exact allowlist', wind
   );
 });
 
-test('authenticates hello and keeps probe connections out of the instance registry', windowsOnly, async (t) => {
+test('authenticates hello and keeps probe connections out of the instance registry', supportedPlatforms, async (t) => {
   const bridge = await startDaemonForTest(t);
   const invalid = await connectExtension(bridge, { token: 'not-the-pairing-token' });
   assert.equal(invalid.acknowledgement.ok, false);
@@ -538,7 +652,7 @@ test('authenticates hello and keeps probe connections out of the instance regist
   );
 });
 
-test('matches out-of-order responses to the originating extension instance', windowsOnly, async (t) => {
+test('matches out-of-order responses to the originating extension instance', supportedPlatforms, async (t) => {
   const bridge = await startDaemonForTest(t);
   const first = await connectExtension(bridge, { instanceId });
   const second = await connectExtension(bridge, {
@@ -561,7 +675,7 @@ test('matches out-of-order responses to the originating extension instance', win
   assert.equal((await secondResult).count, 9);
 });
 
-test('ignores a valid response ID sent from the wrong extension socket', windowsOnly, async (t) => {
+test('ignores a valid response ID sent from the wrong extension socket', supportedPlatforms, async (t) => {
   const bridge = await startDaemonForTest(t);
   const first = await connectExtension(bridge, { instanceId });
   const second = await connectExtension(bridge, {
@@ -589,7 +703,7 @@ test('ignores a valid response ID sent from the wrong extension socket', windows
   assert.equal((await pending).count, 3);
 });
 
-test('never replays open, close, or move after timeout, cancellation, or late replies', windowsOnly, async (t) => {
+test('never replays open, close, or move after timeout, cancellation, or late replies', supportedPlatforms, async (t) => {
   const bridge = await startDaemonForTest(t, { requestTimeoutMs: 100 });
   const operations = ['browser.openTab', 'browser.closeTab', 'browser.moveTab'];
   const extension = await connectExtension(bridge, { instanceId, operations });
@@ -632,7 +746,7 @@ test('never replays open, close, or move after timeout, cancellation, or late re
   }
 });
 
-test('aggregates live device counts using the proposal result shape', windowsOnly, async (t) => {
+test('aggregates live device counts using the proposal result shape', supportedPlatforms, async (t) => {
   const bridge = await startDaemonForTest(t);
   const extension = await connectExtension(bridge, { instanceId });
   const list = bridge.client.call('devices.list', {
@@ -656,7 +770,7 @@ test('aggregates live device counts using the proposal result shape', windowsOnl
   assert.equal(result.complete, true);
 });
 
-test('assigns unique device aliases and lists the assigned alias with each UUID', windowsOnly, async (t) => {
+test('assigns unique device aliases and lists the assigned alias with each UUID', supportedPlatforms, async (t) => {
   const bridge = await startDaemonForTest(t);
   const first = await connectExtension(bridge, { displayName: '工作桌機 2' });
   const second = await connectExtension(bridge, {
@@ -682,7 +796,7 @@ test('assigns unique device aliases and lists the assigned alias with each UUID'
   );
 });
 
-test('bounds in-flight calls and settles pending requests on timeout or disconnect', windowsOnly, async (t) => {
+test('bounds in-flight calls and settles pending requests on timeout or disconnect', supportedPlatforms, async (t) => {
   const bridge = await startDaemonForTest(t, {
     maxPendingRequests: 1,
     requestTimeoutMs: 100,
@@ -710,7 +824,7 @@ test('bounds in-flight calls and settles pending requests on timeout or disconne
   await disconnectAssertion;
 });
 
-test('cancels local waiting and ignores a late response without sending an unproposed cancel frame', windowsOnly, async (t) => {
+test('cancels local waiting and ignores a late response without sending an unproposed cancel frame', supportedPlatforms, async (t) => {
   const bridge = await startDaemonForTest(t);
   const extension = await connectExtension(bridge, { instanceId });
   const controller = new AbortController();
@@ -735,7 +849,7 @@ test('cancels local waiting and ignores a late response without sending an unpro
   assert.equal((await nextRequestPromise).count, 6);
 });
 
-test('rejects oversized WebSocket frames', windowsOnly, async (t) => {
+test('rejects oversized WebSocket frames', supportedPlatforms, async (t) => {
   const bridge = await startDaemonForTest(t, { maxPayloadBytes: 4096 });
   const extension = await connectExtension(bridge, { instanceId });
   const closed = new Promise((resolve) => {

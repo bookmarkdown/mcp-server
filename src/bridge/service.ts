@@ -16,7 +16,7 @@ import {
   type BrowserOperationResult,
   type CountOpenTabsResult,
 } from './protocol.js';
-import { LoopbackWebSocketServer } from './websocket-server.js';
+import { WebSocketBridgeServer } from './websocket-server.js';
 
 export interface DeviceListOptions {
   includeOffline: boolean;
@@ -40,7 +40,7 @@ export interface DeviceListResult {
 export class BridgeService {
   readonly #connections: ConnectionManager;
   readonly #router: RequestRouter;
-  #webSocketServer: LoopbackWebSocketServer | undefined;
+  #webSocketServer: WebSocketBridgeServer | undefined;
   #disabledReason: string | undefined;
 
   private constructor(config?: BridgeConfig) {
@@ -70,7 +70,7 @@ export class BridgeService {
       return service;
     }
 
-    const webSocketServer = new LoopbackWebSocketServer(
+    const webSocketServer = new WebSocketBridgeServer(
       configResult.config,
       service.#connections,
     );
@@ -90,7 +90,7 @@ export class BridgeService {
 
   public static async createStrict(config: BridgeConfig): Promise<BridgeService> {
     const service = new BridgeService(config);
-    const webSocketServer = new LoopbackWebSocketServer(
+    const webSocketServer = new WebSocketBridgeServer(
       config,
       service.#connections,
     );
@@ -353,7 +353,7 @@ export class BridgeService {
     ) {
       return `WebSocket bridge port ${config.port} is already in use; no alternate port was tried.`;
     }
-    return `WebSocket bridge could not bind to 127.0.0.1:${config.port}.`;
+    return `WebSocket bridge could not bind to ${config.host}:${config.port}.`;
   }
 
   #countFailureStatus(

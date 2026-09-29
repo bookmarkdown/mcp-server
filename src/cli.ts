@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startDaemon } from './daemon/service.js';
 import { startProxyService } from './proxy/service.js';
+import { getLocalPipePath } from './ipc/transport.js';
 import type { RuntimeMode } from './config.js';
 
 export async function runCli(
@@ -31,7 +32,7 @@ export async function runCli(
       }
 
       console.error(
-        `BookMarkdown daemon listening on ws://127.0.0.1:${result.daemon.webSocketPort} and \\\\.\\pipe\\${result.daemon.pipeName}.`,
+        `BookMarkdown daemon listening on ${result.daemon.webSocketUrl} and local IPC ${getLocalPipePath(result.daemon.pipeName)}.`,
       );
       return;
     }

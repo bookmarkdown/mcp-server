@@ -7,9 +7,9 @@ ms.topic: how-to
 
 ## Release status
 
-`@bookmarkdown/mcp-server@0.1.3` is published on npm and is the current `latest` version. A clean Windows installation smoke test remains pending, so the public README continues to point users to source installation. The README snapshot on npm predates publication and must be updated in a later version after the smoke test passes.
+`@bookmarkdown/mcp-server@0.1.3` is published on npm and is the current `latest` version. It remains Windows-only; the current source adds Linux support. Clean Windows and Linux package installation smoke tests are pending, so the public README points Linux users to source installation. The README snapshot on npm predates publication and must be updated in a later version after the smoke tests pass.
 
-The repository contains CI, Changesets, and tag-publishing workflows. The project uses the MIT license. The `develop` branch, branch protection rules, npm trusted publisher, and protected `npm` GitHub environment still require maintainer setup.
+The repository contains a Linux/Windows CI matrix, Ubuntu Changesets workflow, and Ubuntu tag-publishing workflow. The project uses the MIT license. The `develop` branch, branch protection rules, npm trusted publisher, and protected `npm` GitHub environment still require maintainer setup.
 
 ## Branch model
 
@@ -42,7 +42,7 @@ Changes that do not affect the npm artifact do not need a Changeset. When uncert
 3. Open a pull request from the release branch to `main`. Merge it only after the required checks pass.
 4. Create and push an annotated `vX.Y.Z` tag on the merged `main` commit, using the version in `package.json`.
 5. The `Publish to npm` workflow validates the tag, tests the package, and publishes through npm Trusted Publishing. The initial release, `v0.1.3`, was published manually after the workflow's publish step failed. Before publishing another version, verify the npm Trusted Publisher uses repository `bookmarkdown/mcp-server`, workflow filename `publish.yml`, and environment `npm`. The GitHub `npm` environment can require maintainer approval before the job runs.
-6. Confirm the version is visible on npm, then install it in a clean Windows environment and smoke-test `bookmarkdown-mcp-server` before updating the public installation instructions.
+6. Confirm the version is visible on npm, then install it in clean Windows and Linux environments and smoke-test `npx --yes --package=@bookmarkdown/mcp-server@<version> -- bookmarkdown-mcp-server` before updating the public installation instructions.
 7. Merge `main` back into `develop` so release-only changes are retained.
 
 The publish workflow skips the publish command when that exact package version is already in the registry. This allowed the first release to be published manually before configuring Trusted Publishing and prevents a duplicate publish when the same version is checked again. An unpublished package is not available through `npx`.

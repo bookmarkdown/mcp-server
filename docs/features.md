@@ -7,15 +7,19 @@ ms.topic: reference
 
 ## 本機架構
 
-使用者手動在前景啟動 daemon。daemon 擁有 loopback WebSocket listener、extension 連線、工具執行與記憶體內 instance 狀態。MCP host 啟動 stdio proxy；proxy 透過 Windows Named Pipe `\\.\pipe\bookmarkdown-mcp` 將工具呼叫送往 daemon，不會代為啟動 daemon。
+使用者手動在前景啟動 daemon。daemon 擁有 WebSocket listener、extension 連線、工具執行與記憶體內 instance 狀態。MCP host 啟動 stdio proxy；proxy 透過本機 IPC 將工具呼叫送往 daemon，不會代為啟動 daemon。Windows 使用 Named Pipe；Linux 使用位於每使用者私有目錄的 Unix domain socket。
 
 CLI 接受 `daemon` 或 `proxy`；省略子命令時預設啟動 `daemon`：
 
-```powershell
+```bash
 npm start
 ```
 
 `npm start`、`npm start -- daemon`、`node dist/cli.js` 與 `node dist/cli.js daemon` 都會以正式模式啟動 daemon，並要求設定精確的 `BOOKMARKDOWN_EXTENSION_IDS`。`npm start -- proxy` 或 `node dist/cli.js proxy` 會啟動 MCP proxy。`npm run dev -- daemon` 明確啟動開發模式，不需要固定 ID allowlist，也不依 `NODE_ENV` 判斷模式。兩種 daemon 模式都需要配對 token。daemon 設定錯誤或 listener 啟動失敗時會清理已開啟的資源並以非零狀態結束；不會掃描替代 port。
+
+目前已發布的 `@bookmarkdown/mcp-server@0.1.3` 僅支援 Windows；Linux 支援可從已完成 `npm ci` 與 build 的 source checkout 使用，套件支援將於後續版本提供。
+
+WebSocket 預設綁定 `127.0.0.1`；選用的區網模式可指定單一 RFC1918 IPv4，並以 `BOOKMARKDOWN_WS_TLS_CERT_FILE` 和 `BOOKMARKDOWN_WS_TLS_KEY_FILE` 提供 TLS 憑證與私密金鑰。
 
 proxy 使用 MCP SDK v2 `serveStdio`。MCP 訊息只寫入 stdout，診斷訊息寫入 stderr。daemon 離線時，proxy 仍可 initialize 與列出靜態工具目錄；每次工具呼叫會檢查 daemon 狀態。呼叫已送出後若結果不確定，不會自動重送。
 
@@ -45,13 +49,13 @@ instance registry 只存在 daemon 記憶體中，daemon 重啟後會清空。`i
 
 ## 連線與錯誤
 
-daemon 預設在 `127.0.0.1:38471` 接受 WebSocket 連線，可用 `BOOKMARKDOWN_WS_PORT` 指定 port。Origin 在兩種模式都必須符合 `chrome-extension://[a-p]{32}`；正式模式另外要求 ID 精確列於 `BOOKMARKDOWN_EXTENSION_IDS`，開發模式則接受任何符合格式的 ID。兩種模式都要求 hello token 正確，且 hello extension ID 必須等於 Origin ID。Origin 本身不是認證；token 不會經 IPC 傳送。listener 與 IPC 必須同時成功啟動，否則 daemon 會回復已建立的 listener。
+daemon 預設在 `127.0.0.1:38471` 接受 WebSocket 連線，可用 `BOOKMARKDOWN_WS_PORT` 指定 port。設定 `BOOKMARKDOWN_WS_HOST` 後，只接受明確的 RFC1918 IPv4；非 loopback 綁定必須提供 TLS 憑證與私密金鑰並使用 WSS，wildcard host 會被拒絕。HTTP Host 必須完全符合綁定位址與實際 port。Origin 在兩種模式都必須符合 `chrome-extension://[a-p]{32}`；正式模式另外要求 ID 精確列於 `BOOKMARKDOWN_EXTENSION_IDS`，開發模式則接受任何符合格式的 ID。兩種模式都要求 hello token 正確，且 hello extension ID 必須等於 Origin ID。Origin 本身不是認證；token 不會經 IPC 傳送。Companion extension 必須能設定相符的 WSS URL 並信任憑證，真實瀏覽器端尚未驗證。listener 與 IPC 必須同時成功啟動，否則 daemon 會回復已建立的 listener。
 
 瀏覽器端連線、hello/ack、RPC 訊息與 client 範例見[瀏覽器整合指南](browser-integration.md)。Companion extension 已實作 WebSocket client 與 browser RPC，相關單元測試已通過；真實 Chrome 整合、Local Network Access、extension 權限與指定 MCP host 的互通性仍未驗證。重連退避已有實作，但尚無專項自動化測試。
 
 IPC health 回覆包含 runtime mode，IPC protocol version 為 `3`。只有健康且模式相同的既有 daemon 才會被視為重複啟動；proxy 可連線至任一模式，不會以 runtime mode 篩選 daemon。
 
-proxy 與 daemon 使用有版本的 Named Pipe IPC。每個 proxy session 維持自己的連線；daemon 可同時服務多個 proxy。主要工具錯誤如下：
+proxy 與 daemon 使用有版本的本機 IPC。Windows 使用 Named Pipe，Linux 使用 Unix domain socket；每個 proxy session 維持自己的連線，daemon 可同時服務多個 proxy。主要工具錯誤如下：
 
 | 錯誤碼 | 意義 |
 | --- | --- |
@@ -64,8 +68,8 @@ WebSocket hello 使用 protocol version `2`。一般註冊要求 app ID `bmd-ext
 
 ## 驗證狀態與後續工作
 
-此 repository 的測試使用一般 Node.js Named Pipe client、MCP stdio process 與 WebSocket client，涵蓋認證、路由、proxy-first 恢復、多 proxy 隔離及啟動 rollback。Companion extension 的相關單元測試也已通過，涵蓋 handshake、probe、browser operations 和設定；重連退避未有專項測試。真實 Chrome/extension 整合、Chrome Local Network Access、extension 權限及指定 MCP host 的互通性尚未驗證。
+此 repository 的測試使用一般 Node.js 本機 IPC client、MCP stdio process 與 WebSocket client，涵蓋認證、路由、proxy-first 恢復、多 proxy 隔離、啟動 rollback，以及 Linux 私有介面上的 WSS handshake。Companion extension 的相關單元測試狀態見其所屬 repository；重連退避未有專項測試。真實 Chrome/extension 整合、Chrome Local Network Access、extension 權限及指定 MCP host 的互通性尚未驗證。
 
 Companion extension 已實作 daemon 離線後以有上限的指數退避重新連線並重新註冊 instance；重連退避尚無專項自動化測試，且尚未在真實瀏覽器中驗證。
 
-設定範圍與本機啟動步驟見[專案 README](../README.md)。
+設定範圍與本機啟動步驟，請參閱[專案 README](../README.md)。
