@@ -27,6 +27,10 @@ Restrict creation of `v*` tags to release maintainers.
 
 In repository settings, allow GitHub Actions to create pull requests. The Changesets workflow needs this permission to open its version pull request.
 
+Changesets uses `GITHUB_TOKEN`, so its branch push does not recursively trigger
+CI. The workflow explicitly dispatches CI for `changeset-release/main` after it
+creates or updates the Version Packages pull request.
+
 ## Changesets and versioning
 
 Every change that affects the published package must include a Changeset. Run `npm run changeset` and select the package and SemVer impact:
