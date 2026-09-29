@@ -17,7 +17,7 @@ npm start
 
 `npm start`、`npm start -- daemon`、`node dist/cli.js` 與 `node dist/cli.js daemon` 都會以正式模式啟動 daemon，並要求設定精確的 `BOOKMARKDOWN_EXTENSION_IDS`。`npm start -- proxy` 或 `node dist/cli.js proxy` 會啟動 MCP proxy。`npm run dev -- daemon` 明確啟動開發模式，不需要固定 ID allowlist，也不依 `NODE_ENV` 判斷模式。兩種 daemon 模式都需要配對 token。daemon 設定錯誤或 listener 啟動失敗時會清理已開啟的資源並以非零狀態結束；不會掃描替代 port。
 
-目前已發布的 `@bookmarkdown/mcp-server@0.1.3` 僅支援 Windows；Linux 支援可從已完成 `npm ci` 與 build 的 source checkout 使用。尚未發布的 `0.2.0` 套件候選版已在 Ubuntu 與 Windows 通過乾淨 tarball 安裝及 MCP initialize smoke test；npm 套件的 Linux 支援需等 `0.2.0` 發布後才能使用。
+目前已發布的 `@bookmarkdown/mcp-server@0.2.0` 支援 Windows 與 Linux；套件已在 Ubuntu 與 Windows 通過乾淨安裝及 MCP initialize smoke test，從 npm registry 安裝的套件也已在 Ubuntu 完成相同驗證。
 
 WebSocket 預設綁定 `127.0.0.1`；選用的區網模式可指定單一 RFC1918 IPv4，並以 `BOOKMARKDOWN_WS_TLS_CERT_FILE` 和 `BOOKMARKDOWN_WS_TLS_KEY_FILE` 提供 TLS 憑證與私密金鑰。
 

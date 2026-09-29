@@ -1,9 +1,13 @@
-name: Changesets
+name: Version Packages
 
 on:
   push:
     branches:
-      - develop
+      - main
+
+concurrency:
+  group: version-packages
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -11,12 +15,13 @@ permissions:
 
 jobs:
   version-pr:
+    name: Open or update version PR
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 24.11.0
           cache: npm
@@ -28,4 +33,4 @@ jobs:
           HOME: ${{ runner.temp }}
         with:
           version: npm run version-packages
-          branch: develop
+          branch: main
