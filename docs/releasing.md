@@ -19,7 +19,7 @@ The repository contains a Linux/Windows CI matrix, Ubuntu Changesets workflow, a
 * `release/<version>` branches start from `develop` after a Changesets version pull request is merged. Use them for final validation and release-only fixes.
 * `hotfix/<version>` branches start from `main`, contain a Changesets entry, and merge back to both `main` and `develop`.
 
-Create `develop` from the current `main` commit in GitHub before relying on the Changesets workflow. Protect `main` and `develop` with pull requests and required CI checks. Restrict creation of `v*` tags to release maintainers.
+Keep `develop` synchronized with `main` before accepting Changesets version pull requests. Protect `main` and `develop` with pull requests and required CI checks. Restrict creation of `v*` tags to release maintainers.
 
 In repository settings, allow GitHub Actions to create pull requests. The Changesets workflow needs this permission to open its version pull request.
 
@@ -31,7 +31,7 @@ Every change that affects the published package must include a Changeset. Run `n
 * `minor` for backward-compatible functionality.
 * `major` for incompatible public behavior or interface changes.
 
-Commit the generated `.changeset/*.md` file with the change. The Changesets workflow opens or updates a version pull request against `develop`. That pull request updates `package.json`, `package-lock.json`, and `CHANGELOG.md`; review it as the proposed release version. Do not change the package version manually or publish from a feature branch.
+Commit the generated `.changeset/*.md` file with the change. The Changesets workflow opens or updates a version pull request against `develop`. Its `version-packages` script runs `changeset version` and refreshes `package-lock.json`; review the resulting `package.json`, `package-lock.json`, and `CHANGELOG.md` as the proposed release version. Do not change the package version manually or publish from a feature branch.
 
 Changes that do not affect the npm artifact do not need a Changeset. When uncertain, include one and explain the expected impact in its summary.
 
@@ -51,10 +51,10 @@ The publish workflow skips the publish command when that exact package version i
 
 The npm `latest` version is `0.1.3` and supports Windows only. The Linux support change is a `minor` Changeset, so its expected version is `0.2.0` when applied to `0.1.3`. Do not reuse or move the already-published `v0.1.3` tag.
 
-The release is blocked by branch version drift. At this checkpoint, `main` contains package version `0.1.3` and `.changeset/linux-lan-support.md`, while `develop` and the remote `changeset-release/develop` branch still contain package version `0.1.1`. The Changesets workflow runs only on pushes to `develop`.
+At the `0.1.3` release baseline, `main` and `develop` both contain package version `0.1.3` and `.changeset/linux-lan-support.md`. As of 2026-09-30, the remote `changeset-release/develop` branch still declares `0.1.1`. The Changesets workflow runs only on pushes to `develop`.
 
-1. Merge `main` into `develop` through a reviewed pull request. Confirm that `develop` now contains package version `0.1.3` and the Linux support Changeset. Do not merge a generated version pull request that is still based on `0.1.1`; it would propose a version below the published `0.1.3`.
-2. After the merge reaches `develop`, let the Changesets workflow create or update its version pull request. Review that it proposes `0.2.0` and updates `package.json`, `package-lock.json`, and `CHANGELOG.md`. Do not edit the package version manually.
+1. Confirm that `develop` contains the `0.1.3` baseline and the Linux support Changeset. This main-to-develop sync is already present at this checkpoint; if it is missing in a later release, merge `main` into `develop` through a reviewed pull request. Do not merge a generated version pull request based on `0.1.1`, because it would propose a version below the published `0.1.3`.
+2. After a push to `develop`, let the Changesets workflow create or update its version pull request. Review that it proposes `0.2.0` and updates `package.json`, `package-lock.json`, and `CHANGELOG.md`. If the existing version branch still proposes a version below `0.2.0`, refresh it before merging. Do not edit the package version manually.
 3. After merging the version pull request into `develop`, follow release steps 2 and 3 above using `release/0.2.0`. Run the Linux and Windows CI checks, and install the packed tarball in clean Linux and Windows environments. `npm run verify:pack` checks archive contents but does not install or run the package. Update the public README installation status after the tarball smoke tests pass.
 4. Merge the release pull request into `main`. Confirm that `package.json` reports `0.2.0`, then create and push the tag from the merged `main` commit:
 
