@@ -1,5 +1,11 @@
 # @bookmarkdown/mcp-server
 
+## 0.1.3
+
+### Patch Changes
+
+- Align the package version with the corrected npm release tag.
+
 ## 0.1.1
 
 ### Patch Changes
