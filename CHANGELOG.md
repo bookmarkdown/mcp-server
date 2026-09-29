@@ -1,5 +1,12 @@
 # @bookmarkdown/mcp-server
 
+## 0.2.1
+
+### Patch Changes
+
+- e45ff7c: Simplify releases around `main`, tighten publish validation, and document npm installation for Windows and Linux.
+- c84d984: Run cross-platform CI explicitly for automated Version Packages pull requests.
+
 ## 0.2.0
 
 ### Minor Changes
