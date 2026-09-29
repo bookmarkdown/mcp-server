@@ -34,6 +34,14 @@ Server 提供以下 MCP tools：
 
 ## 從 npm 安裝
 
+不需全域安裝，即可執行已發布的 CLI：
+
+```bash
+npx -y @bookmarkdown/mcp-server@0.2.1
+```
+
+啟動 daemon 前，請先設定下方列出的必要環境變數。也可以選擇全域安裝：
+
 ```bash
 npm install --global @bookmarkdown/mcp-server
 bookmarkdown-mcp-server
@@ -57,33 +65,39 @@ npm run build
 ```powershell
 $env:BOOKMARKDOWN_BRIDGE_TOKEN = (node -p "require('node:crypto').randomBytes(32).toString('hex')")
 $env:BOOKMARKDOWN_EXTENSION_IDS = "<32-character-extension-id>"
-npm start
+npx -y @bookmarkdown/mcp-server@0.2.1
 ```
 
 ```bash
 export BOOKMARKDOWN_BRIDGE_TOKEN="$(node -p "require('node:crypto').randomBytes(32).toString('hex')")"
 export BOOKMARKDOWN_EXTENSION_IDS="<32-character-extension-id>"
-npm start
+npx -y @bookmarkdown/mcp-server@0.2.1
 ```
+
+全域安裝可改用 `bookmarkdown-mcp-server`；已建置的 source checkout 可改用 `npm start`。
 
 請讓 daemon 持續在此終端執行；按 `Ctrl+C` 停止。不要將配對 token 放入命令列參數、URL、記錄檔或原始碼管理。
 
 ## 設定 MCP host
 
-設定 MCP host 以 proxy 模式啟動此 source checkout 建置的 CLI。請將範例路徑換成 MCP host 上此 checkout 的 `dist/cli.js` 絕對路徑，並先執行 `npm ci` 與 `npm run build`。
+設定 MCP host 透過 `npx` 啟動已發布的 proxy，不需 source checkout 或全域安裝。Daemon 與 proxy 請固定使用相同套件版本；IPC 握手會拒絕版本不一致的連線。`-y` 可避免安裝確認提示阻擋 MCP 啟動。
 
 ```json
 {
   "mcpServers": {
     "bookmarkdown": {
-      "command": "node",
-  "args": ["/path/to/mcp-server/dist/cli.js", "proxy"]
+        "command": "npx",
+        "args": ["-y", "@bookmarkdown/mcp-server@0.2.1", "proxy"]
     }
   }
 }
 ```
 
-在 Windows 上，請將範例路徑換成 `dist/cli.js` 的絕對 Windows 路徑。
+MCP host 的 PATH 必須能找到 `npx`。Windows 上若 host 需要 command shim，可改用 `npx.cmd`。
+
+請在本 repository 以外執行已發布版本的 `npx` 指令，並避免將 MCP host 的工作目錄設為此 checkout。在相同版本的 checkout 內，npm 可能解析成本機套件而非已發布的 CLI；本機 executable 不存在時會回報 `bookmarkdown-mcp-server: not found`。
+
+從原始碼開發時，先執行 `npm ci` 與 `npm run build`，再用 `"command": "node"` 搭配 `"args": ["/path/to/mcp-server/dist/cli.js", "proxy"]`。請換成 checkout 的絕對路徑，Windows 使用 Windows 路徑。這會執行本機程式碼，而非 npm 發布版本。
 
 MCP host 只會啟動 proxy，不會啟動 daemon。Proxy 使用預設本機 IPC endpoint `bookmarkdown-mcp`，Windows 為 Named Pipe，Linux 為 Unix domain socket，不需要 WebSocket 配對 token。使用瀏覽器工具前，請先啟動 daemon。
 

@@ -38,6 +38,14 @@ See [Features and limitations (Traditional Chinese)](docs/features.md), [Archite
 
 ## Install from npm
 
+You can run the published CLI without a global installation:
+
+```bash
+npx -y @bookmarkdown/mcp-server@0.2.1
+```
+
+Set the required environment variables below before starting the daemon. Alternatively, install the CLI globally:
+
 ```bash
 npm install --global @bookmarkdown/mcp-server
 bookmarkdown-mcp-server
@@ -61,33 +69,39 @@ The CLI starts the production daemon when you omit the subcommand. The productio
 ```powershell
 $env:BOOKMARKDOWN_BRIDGE_TOKEN = (node -p "require('node:crypto').randomBytes(32).toString('hex')")
 $env:BOOKMARKDOWN_EXTENSION_IDS = "<32-character-extension-id>"
-npm start
+npx -y @bookmarkdown/mcp-server@0.2.1
 ```
 
 ```bash
 export BOOKMARKDOWN_BRIDGE_TOKEN="$(node -p "require('node:crypto').randomBytes(32).toString('hex')")"
 export BOOKMARKDOWN_EXTENSION_IDS="<32-character-extension-id>"
-npm start
+npx -y @bookmarkdown/mcp-server@0.2.1
 ```
+
+For a global installation, use `bookmarkdown-mcp-server`; for a built source checkout, use `npm start`.
 
 Keep the daemon running in this terminal. Press `Ctrl+C` to stop it. Do not put the pairing token in command-line arguments, URLs, logs, or source control.
 
 ## Configure an MCP host
 
-Configure your MCP host to start the proxy built from this source checkout. Replace the example path with this checkout's absolute `dist/cli.js` path on the MCP host, and run `npm ci` and `npm run build` first.
+Configure your MCP host to start the published proxy with `npx`. No source checkout or global installation is required. Pin the daemon and proxy to the same package version; the IPC handshake rejects version mismatches. The `-y` flag prevents an installation prompt from blocking MCP startup.
 
 ```json
 {
   "mcpServers": {
     "bookmarkdown": {
-      "command": "node",
-  "args": ["/path/to/mcp-server/dist/cli.js", "proxy"]
+        "command": "npx",
+        "args": ["-y", "@bookmarkdown/mcp-server@0.2.1", "proxy"]
     }
   }
 }
 ```
 
-On Windows, replace the example path with the absolute Windows path to `dist/cli.js`.
+The MCP host must be able to find `npx` on its PATH. On Windows, hosts that require a command shim may need `npx.cmd` instead.
+
+Run the published `npx` command outside this repository, and avoid using this checkout as the MCP host's working directory. Inside a same-version checkout, npm may resolve the local package instead of the published CLI and fail with `bookmarkdown-mcp-server: not found` if the local executable is unavailable.
+
+For source development, run `npm ci` and `npm run build`, then use `"command": "node"` with `"args": ["/path/to/mcp-server/dist/cli.js", "proxy"]`. Replace the path with the checkout's absolute path (a Windows path on Windows). This runs local code rather than the npm release.
 
 The MCP host starts only the proxy; it does not start the daemon. The proxy uses the default local IPC endpoint, a Windows Named Pipe or Linux Unix domain socket named `bookmarkdown-mcp`, and does not need the WebSocket pairing token. Start the daemon before using browser tools.
 
