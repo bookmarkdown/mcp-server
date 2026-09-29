@@ -45,7 +45,7 @@
     "test": "npm run build && node --test --test-concurrency=1 tests/*.test.mjs",
     "prepack": "npm run build",
     "changeset": "changeset",
-    "version-packages": "changeset version",
+    "version-packages": "changeset version && npm install --package-lock-only --ignore-scripts --no-audit --no-fund",
     "verify:pack": "node scripts/verify-pack.mjs"
   },
   "dependencies": {
