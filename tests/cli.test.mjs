@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { createConnection, createServer as createNetServer } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { getLocalPipePath } from '../dist/ipc/transport.js';
@@ -203,6 +205,30 @@ test('dispatches daemon mode to daemon startup and reports invalid configuration
   assert.doesNotMatch(result.stderr, /Usage:/);
   assert.equal(result.stdout, '');
 });
+
+test(
+  'runs the CLI through a symlinked npm bin entry on Linux',
+  {
+    skip: process.platform !== 'linux'
+      ? 'npm uses symlinked bin entries on Linux'
+      : false,
+  },
+  async (t) => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'bookmarkdown-cli-'));
+    t.after(() => rmSync(tempDir, { recursive: true, force: true }));
+    const symlinkPath = join(tempDir, 'bookmarkdown-mcp-server');
+    symlinkSync(builtCliPath, symlinkPath);
+
+    const result = await runCli(['browser'], {}, symlinkPath);
+
+    assert.notEqual(result.code, 0);
+    assert.match(
+      result.stderr,
+      /Usage: bookmarkdown-mcp-server \[daemon\|proxy\] \(defaults to daemon\)/,
+    );
+    assert.equal(result.stdout, '');
+  },
+);
 
 test('keeps package defaults in production and routes the dev entrypoint explicitly', async (t) => {
   const packageMetadata = JSON.parse(

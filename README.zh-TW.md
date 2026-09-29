@@ -5,7 +5,7 @@
 BookMarkdown MCP Server 讓 MCP host 與 companion browser extension 溝通。Daemon 預設透過 loopback WebSocket 接受 extension 連線；MCP host 則透過本機 IPC 與獨立的 stdio proxy 通訊，Windows 使用 Named Pipe，Linux 使用 Unix domain socket。
 
 > [!IMPORTANT]
-> 目前 source checkout 支援 Windows 與 Linux；已發布至 npm 的 `0.1.3` 仍僅支援 Windows，Linux 支援可從原始碼使用。乾淨套件安裝 smoke test 尚未完成。真實 Chrome、companion extension、Chrome Local Network Access 與指定 MCP host 的相容性仍未驗證。選用的區網連線需要 WSS，且 companion extension 必須設定為連線至伺服器 URL。
+> 目前 source checkout 支援 Windows 與 Linux；已發布至 npm 的 `0.1.3` 仍僅支援 Windows。尚未發布的 `0.2.0` 套件候選版已在 Ubuntu 與 Windows 通過乾淨 tarball 安裝及 MCP initialize smoke test；發布前 Linux 使用者仍應從原始碼安裝。真實 Chrome、companion extension、Chrome Local Network Access 與指定 MCP host 的相容性仍未驗證。選用的區網連線需要 WSS，且 companion extension 必須設定為連線至伺服器 URL。
 
 ## 功能
 
@@ -41,7 +41,7 @@ npm ci
 npm run build
 ```
 
-已發布的 `0.1.3` 僅支援 Windows。Linux 可使用此 source checkout；Windows 與 Linux 的乾淨套件安裝 smoke test 均尚未完成。
+已發布的 `0.1.3` 僅支援 Windows。通過測試的 `0.2.0` 套件候選版尚未發布；Linux 使用者可先使用此 source checkout。
 
 啟動 daemon 前，請先設定下方列出的必要環境變數。
 

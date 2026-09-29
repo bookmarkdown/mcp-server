@@ -5,7 +5,13 @@
 BookMarkdown MCP Server connects an MCP host to a companion browser extension. The daemon accepts the extension over WebSocket, using loopback by default; the MCP host communicates with a separate stdio proxy over local IPC, using Windows Named Pipes or Linux Unix domain sockets.
 
 > [!IMPORTANT]
-> The current source checkout supports Windows and Linux. Published npm version `0.1.3` remains Windows-only; Linux support is available from source. Clean package installation smoke tests have not been run. Real Chrome, companion extension, Chrome Local Network Access, and specific MCP host compatibility remain unverified. Optional LAN connections require WSS and a companion extension configured for the server URL.
+> The current source checkout supports Windows and Linux. Published npm version
+> `0.1.3` remains Windows-only. The `0.2.0` package candidate passed clean tarball
+> installation and MCP initialize smoke tests on Ubuntu and Windows, but is not
+> published yet. Linux users should continue to install from source. Real Chrome,
+> companion extension, Chrome Local Network Access, and specific MCP host
+> compatibility remain unverified. Optional LAN connections require WSS and a
+> companion extension configured for the server URL.
 
 ## Features
 
@@ -41,7 +47,9 @@ npm ci
 npm run build
 ```
 
-Published version `0.1.3` remains Windows-only. Linux users can run this source checkout; clean package installation smoke tests for both operating systems remain pending.
+Published version `0.1.3` remains Windows-only. The tested `0.2.0` package
+candidate is not available on npm yet; Linux users can run this source checkout
+until `0.2.0` is published.
 
 Set the required environment variables below before starting the daemon.
 

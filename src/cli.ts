@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { resolve } from 'node:path';
+import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { startDaemon } from './daemon/service.js';
 import { startProxyService } from './proxy/service.js';
@@ -45,9 +45,19 @@ export async function runCli(
   }
 }
 
-if (
-  process.argv[1] &&
-  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
-) {
+function isExecutedFile(): boolean {
+  const entrypoint = process.argv[1];
+  if (!entrypoint) {
+    return false;
+  }
+
+  try {
+    return realpathSync(entrypoint) === fileURLToPath(import.meta.url);
+  } catch {
+    return false;
+  }
+}
+
+if (isExecutedFile()) {
   void runCli('production');
 }

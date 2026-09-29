@@ -1,5 +1,12 @@
 # @bookmarkdown/mcp-server
 
+## 0.2.0
+
+### Minor Changes
+
+- e5ae4c5: Add Linux local IPC support and TLS-protected private-LAN
+  WebSocket bindings.
+
 ## 0.1.3
 
 ### Patch Changes
