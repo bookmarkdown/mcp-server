@@ -1,5 +1,5 @@
 {
-  "name": "@mesak/bmd-mcp-server",
+  "name": "@bookmarkdown/mcp-server",
   "version": "0.1.1",
   "description": "Local BookMarkdown MCP server with a loopback WebSocket bridge",
   "license": "MIT",
