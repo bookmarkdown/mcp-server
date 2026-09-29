@@ -15,7 +15,7 @@ CLI 接受 `daemon` 或 `proxy`；省略子命令時預設啟動 `daemon`：
 npm start
 ```
 
-從 source checkout 執行 `npm start` 或 `npm start -- daemon` 會啟動正式模式 daemon，並要求設定精確的 `BOOKMARKDOWN_EXTENSION_IDS`。發布版本在 registry 可用後，可用 `npx --yes --package=@mesak/bmd-mcp-server@0.1.1 -- bookmarkdown-mcp-server` 啟動 daemon；加上 `proxy` 子命令即可啟動 MCP proxy。從 checkout 執行 `npm start -- proxy` 也會啟動 MCP proxy。`npm run dev -- daemon` 明確啟動開發模式，不需要固定 ID allowlist，也不依 `NODE_ENV` 判斷模式。兩種 daemon 模式都需要配對 token。daemon 設定錯誤或 listener 啟動失敗時會清理已開啟的資源並以非零狀態結束；不會掃描替代 port。
+`npm start`、`npm start -- daemon`、`node dist/cli.js` 與 `node dist/cli.js daemon` 都會以正式模式啟動 daemon，並要求設定精確的 `BOOKMARKDOWN_EXTENSION_IDS`。`npm start -- proxy` 或 `node dist/cli.js proxy` 會啟動 MCP proxy。`npm run dev -- daemon` 明確啟動開發模式，不需要固定 ID allowlist，也不依 `NODE_ENV` 判斷模式。兩種 daemon 模式都需要配對 token。daemon 設定錯誤或 listener 啟動失敗時會清理已開啟的資源並以非零狀態結束；不會掃描替代 port。
 
 proxy 使用 MCP SDK v2 `serveStdio`。MCP 訊息只寫入 stdout，診斷訊息寫入 stderr。daemon 離線時，proxy 仍可 initialize 與列出靜態工具目錄；每次工具呼叫會檢查 daemon 狀態。呼叫已送出後若結果不確定，不會自動重送。
 
