@@ -7,23 +7,23 @@ ms.topic: how-to
 
 ## Release status
 
-`@bookmarkdown/mcp-server@0.1.3` is published on npm and is the current `latest`
-version. It remains Windows-only; the unpublished `0.2.0` candidate adds Linux
-support. Its tarball passed clean installation and MCP initialize smoke tests on
-Ubuntu and Windows, and both CI jobs passed. The public README continues to point
-Linux users to source installation until `0.2.0` is published.
+`@bookmarkdown/mcp-server@0.2.0` is published on npm as the current `latest`
+version and supports Windows and Linux. Its candidate tarball passed clean
+installation and MCP initialize smoke tests on Ubuntu and Windows. The published
+package was also installed from the npm registry and initialized on Ubuntu.
 
-The repository contains a Linux/Windows CI matrix, Ubuntu Changesets workflow, and Ubuntu tag-publishing workflow. The project uses the MIT license, and the `develop` branch exists. Before the next release, verify branch protection, GitHub Actions pull request permissions, the npm trusted publisher, and the protected `npm` GitHub environment.
+> [!IMPORTANT]
+> Normal releases use `main` directly. Do not create `develop`, `release/*`, or
+> manual `version/*` branches. Changesets owns the generated version branch.
 
 ## Branch model
 
-* `main` contains released versions. Create annotated tags in the form `vX.Y.Z` on commits merged to `main`.
-* `develop` is the integration branch for the next release.
-* `feature/<name>` branches start from `develop` and merge back through pull requests.
-* `release/<version>` branches start from `develop` after a Changesets version pull request is merged. Use them for final validation and release-only fixes.
-* `hotfix/<version>` branches start from `main`, contain a Changesets entry, and merge back to both `main` and `develop`.
+* `main` is the only long-lived branch and contains released code.
+* `feature/<name>`, `fix/<name>`, and `docs/<name>` are short-lived pull request branches created from `main`.
+* `changeset-release/main` is managed by Changesets. Do not create or edit a second version branch manually.
 
-Keep `develop` synchronized with `main` before accepting Changesets version pull requests. Protect `main` and `develop` with pull requests and required CI checks. Restrict creation of `v*` tags to release maintainers.
+Protect `main` with pull requests and required Ubuntu and Windows CI checks.
+Restrict creation of `v*` tags to release maintainers.
 
 In repository settings, allow GitHub Actions to create pull requests. The Changesets workflow needs this permission to open its version pull request.
 
@@ -35,61 +35,65 @@ Every change that affects the published package must include a Changeset. Run `n
 * `minor` for backward-compatible functionality.
 * `major` for incompatible public behavior or interface changes.
 
-Commit the generated `.changeset/*.md` file with the change. The Changesets workflow opens or updates a version pull request against `develop`. Its `version-packages` script runs `changeset version` and refreshes `package-lock.json`; review the resulting `package.json`, `package-lock.json`, and `CHANGELOG.md` as the proposed release version. Do not change the package version manually or publish from a feature branch.
+Commit the generated `.changeset/*.md` file with the change. After the pull
+request merges to `main`, Changesets opens or updates one version pull request
+against `main`. Its `version-packages` script runs `changeset version` and
+refreshes `package-lock.json`; review `package.json`, `package-lock.json`, and
+`CHANGELOG.md`. Do not change the package version manually.
 
 Changes that do not affect the npm artifact do not need a Changeset. When uncertain, include one and explain the expected impact in its summary.
 
 ## Release steps
 
-1. Merge the Changesets version pull request into `develop` after its CI checks pass.
-2. Create `release/<version>` from `develop`. Run `npm test`, `npm run typecheck`, and `npm run verify:pack`; address release blockers on this branch.
-3. Open a pull request from the release branch to `main`. Merge it only after the required checks pass.
-4. Create and push an annotated `vX.Y.Z` tag on the merged `main` commit, using the version in `package.json`.
-5. The `Publish to npm` workflow validates the tag, tests the package, and publishes through npm Trusted Publishing. The initial release, `v0.1.3`, was published manually after the workflow's publish step failed. Before publishing another version, verify the npm Trusted Publisher uses repository `bookmarkdown/mcp-server`, workflow filename `publish.yml`, and environment `npm`. The GitHub `npm` environment can require maintainer approval before the job runs.
-6. Confirm the version is visible on npm, then install it in clean Windows and Linux environments and smoke-test `npx --yes --package=@bookmarkdown/mcp-server@<version> -- bookmarkdown-mcp-server` before updating the public installation instructions.
-7. Merge `main` back into `develop` so release-only changes are retained.
+1. Create one short-lived branch from `main`. Add the implementation, tests,
+   documentation, and Changeset in the same pull request.
+2. Run `npm test`, `npm run typecheck`, and `npm run verify:pack` locally. Push
+   only after these checks pass.
+3. Merge the pull request to `main` after Ubuntu and Windows CI pass.
+4. Review the automated Version Packages pull request. Merge it after CI passes.
+5. Confirm the npm Trusted Publisher configuration before creating a tag.
+6. Tag the current `main` commit as `vX.Y.Z` and push only that tag.
+7. Confirm the publish workflow succeeds, then install the registry package and
+   complete an MCP initialize smoke test.
 
-The publish workflow skips the publish command when that exact package version is already in the registry. This allowed the first release to be published manually before configuring Trusted Publishing and prevents a duplicate publish when the same version is checked again. An unpublished package is not available through `npx`.
+The publish workflow rejects tags that do not match `package.json` or do not
+point to the current `main` commit. It skips npm publishing when the exact version
+already exists in the registry.
 
-## Publishing the Linux-capable version
+## Push discipline
 
-The npm `latest` version is `0.1.3` and supports Windows only. The Linux support change is a `minor` Changeset, so its expected version is `0.2.0` when applied to `0.1.3`. Do not reuse or move the already-published `v0.1.3` tag.
+* Use one branch and one pull request for each logical change.
+* Complete local validation before the first push.
+* Push follow-up commits only when review or CI reveals a real defect.
+* Do not create a manual version branch beside `changeset-release/main`.
+* Do not create a release branch solely to rerun checks already required on the
+  Version Packages pull request.
 
-The Linux support Changeset was consumed by Version Packages PR #4, which
-merged `0.2.0` into `develop`. The release branch is `release/0.2.0`; the version
-has not been tagged or published. A minor bump from `0.1.1` also calculates to
-`0.2.0`, so compare the generated package version with the latest published
-version rather than treating the branch's starting version as the release
-result.
+## Trusted Publishing
 
-1. Confirm that Linux and Windows CI checks pass on the release pull request.
-   These checks passed on PR #5, including `npm run verify:pack`, which checks
-   archive contents, installs the tarball, and initializes its MCP proxy. Keep
-   Linux installation instructions pointed to source until `0.2.0` is published.
-2. Merge the release pull request into `main`. Confirm that `package.json` reports `0.2.0`, then create and push the tag from the merged `main` commit:
+Configure the npm package Trusted Publisher with these exact values:
 
-   ```bash
-   git switch main
-   git pull --ff-only origin main
-   git tag -a v0.2.0 -m "Release v0.2.0"
-   git push origin v0.2.0
-   ```
+* Organization or user: `bookmarkdown`
+* Repository: `mcp-server`
+* Workflow filename: `publish.yml`
+* Environment: `npm`
 
-   Pushing the tag starts the publish workflow. Confirm it succeeds and that `npm view @bookmarkdown/mcp-server version` reports `0.2.0`; do not run `npm publish` manually while the workflow is publishing.
-3. Merge `main` back into `develop` after the release so both branches retain the published version and release-only changes.
+The workflow requires `id-token: write` and runs on a GitHub-hosted runner. Do
+not add a long-lived npm token. Version `0.2.0` passed every workflow gate, but
+npm rejected the OIDC publish request with `E404`; authenticated manual publishing
+was used only after the workflow finished. Fix the Trusted Publisher mapping
+before the next tag.
 
-## First-release setup
+## Version 0.2.0 record
 
-The first public version, `0.1.3`, was manually published from tagged commit `c341306` after the workflow's npm publish step failed. Before publishing a later version, complete these setup checks:
-
-1. In npm package settings, configure a GitHub Actions trusted publisher for `bookmarkdown/mcp-server`, workflow filename `publish.yml`, and environment `npm`. Allow direct publishing for this publisher.
-2. Configure the GitHub `npm` environment with required reviewers. Keep the workflow on a GitHub-hosted runner and preserve `id-token: write` permission.
-3. Confirm a later tagged release either skips publishing when its exact version already exists or publishes successfully through OIDC.
-
-The publish workflow installs npm CLI 11.5.1 because npm Trusted Publishing requires that version or newer. Do not add a long-lived npm publish token to repository secrets.
+Release PR #5 merged the tested package to `main`. Annotated tag `v0.2.0` points
+to commit `fc199e3`. Ubuntu and Windows CI passed, and the published registry
+package completed a clean Ubuntu install and MCP initialize smoke test.
 
 ## Hotfixes and failed releases
 
-For a hotfix, branch from `main`, add the appropriate Changeset, and merge the reviewed pull request to `main`. Tag the resulting commit to publish it, then merge `main` back into `develop`. The Changesets version pull request on `develop` must not discard the hotfix version or changelog entry.
+For a hotfix, create a short-lived branch from `main`, include a patch Changeset,
+and follow the same Version Packages pull request and tag flow. Do not introduce
+a separate permanent branch model for hotfixes.
 
 Published npm versions are immutable. If a release is faulty, prepare a new Changeset and publish a higher version; do not attempt to reuse or replace the published version. If CI fails before publication, fix the release branch and rerun checks before creating or moving a tag. Never move a tag that has already published a package.

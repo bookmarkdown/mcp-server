@@ -5,10 +5,8 @@
 BookMarkdown MCP Server connects an MCP host to a companion browser extension. The daemon accepts the extension over WebSocket, using loopback by default; the MCP host communicates with a separate stdio proxy over local IPC, using Windows Named Pipes or Linux Unix domain sockets.
 
 > [!IMPORTANT]
-> The current source checkout supports Windows and Linux. Published npm version
-> `0.1.3` remains Windows-only. The `0.2.0` package candidate passed clean tarball
-> installation and MCP initialize smoke tests on Ubuntu and Windows, but is not
-> published yet. Linux users should continue to install from source. Real Chrome,
+> Published npm version `0.2.0` supports Windows and Linux. Its package passed
+> clean installation and MCP initialize smoke tests on Ubuntu and Windows. Real Chrome,
 > companion extension, Chrome Local Network Access, and specific MCP host
 > compatibility remain unverified. Optional LAN connections require WSS and a
 > companion extension configured for the server URL.
@@ -38,6 +36,13 @@ See [Features and limitations (Traditional Chinese)](docs/features.md), [Archite
 * npm
 * A compatible companion browser extension (maintained separately)
 
+## Install from npm
+
+```bash
+npm install --global @bookmarkdown/mcp-server
+bookmarkdown-mcp-server
+```
+
 ## Install from source
 
 ```bash
@@ -46,10 +51,6 @@ cd mcp-server
 npm ci
 npm run build
 ```
-
-Published version `0.1.3` remains Windows-only. The tested `0.2.0` package
-candidate is not available on npm yet; Linux users can run this source checkout
-until `0.2.0` is published.
 
 Set the required environment variables below before starting the daemon.
 
