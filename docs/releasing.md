@@ -8,12 +8,10 @@ ms.topic: how-to
 ## Release status
 
 `@bookmarkdown/mcp-server@0.1.3` is published on npm and is the current `latest`
-version. It remains Windows-only; the `0.2.0` release candidate adds Linux
-support. Its tarball has installed and completed an MCP initialize smoke test on
-Ubuntu. A clean Windows package smoke test and final release validation remain
-pending, so the public README continues to point Linux users to source
-installation. Update the README in the release after both platform smoke tests
-pass.
+version. It remains Windows-only; the unpublished `0.2.0` candidate adds Linux
+support. Its tarball passed clean installation and MCP initialize smoke tests on
+Ubuntu and Windows, and both CI jobs passed. The public README continues to point
+Linux users to source installation until `0.2.0` is published.
 
 The repository contains a Linux/Windows CI matrix, Ubuntu Changesets workflow, and Ubuntu tag-publishing workflow. The project uses the MIT license, and the `develop` branch exists. Before the next release, verify branch protection, GitHub Actions pull request permissions, the npm trusted publisher, and the protected `npm` GitHub environment.
 
@@ -64,12 +62,10 @@ has not been tagged or published. A minor bump from `0.1.1` also calculates to
 version rather than treating the branch's starting version as the release
 result.
 
-1. Complete final validation on `release/0.2.0`, including Linux and Windows CI
-   checks and clean tarball installation smoke tests. The Ubuntu MCP initialize
-   smoke test has passed; the Windows package smoke test remains required.
-   `npm run verify:pack` checks archive contents, installs the tarball, and
-   initializes its MCP proxy. Update the public README installation status after
-   both platform smoke tests pass.
+1. Confirm that Linux and Windows CI checks pass on the release pull request.
+   These checks passed on PR #5, including `npm run verify:pack`, which checks
+   archive contents, installs the tarball, and initializes its MCP proxy. Keep
+   Linux installation instructions pointed to source until `0.2.0` is published.
 2. Merge the release pull request into `main`. Confirm that `package.json` reports `0.2.0`, then create and push the tag from the merged `main` commit:
 
    ```bash
