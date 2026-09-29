@@ -23,7 +23,7 @@ Server 提供以下 MCP tools：
 
 分頁標題與 URL 可能包含敏感資訊。Server 不讀取頁面內容；extension 預期會排除 incognito 視窗與分頁。操作結果不明時，不會自動重送分頁變更操作。
 
-詳見[功能與限制](docs/features.md)、[系統架構](docs/architecture.md)、[瀏覽器整合指南](docs/browser-integration.md)及[文件規約](docs/documentation-conventions.md)。
+詳見[功能與限制](docs/features.md)、[系統架構](docs/architecture.md)、[瀏覽器整合指南](docs/browser-integration.md)、[推送與發布流程](docs/pushing.md)及[文件規約](docs/documentation-conventions.md)。
 
 ## 需求
 
