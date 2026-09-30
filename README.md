@@ -82,6 +82,8 @@ For a global installation, use `bookmarkdown-mcp-server`; for a built source che
 
 Keep the daemon running in this terminal. Press `Ctrl+C` to stop it. Do not put the pairing token in command-line arguments, URLs, logs, or source control.
 
+At startup, the daemon prints the actual WebSocket URL, allowed extension IDs, and BMD > Settings > MCP connection instructions to stderr. The pairing token is marked as configured but never printed; enter the same `BOOKMARKDOWN_BRIDGE_TOKEN` value in the extension. Logs distinguish a successful connection test from a persistent connection and report connection, disconnection, and handshake rejection reasons. They do not include tab metadata or operation payloads. With WSS, the browser must trust the server certificate.
+
 ## Configure an MCP host
 
 Configure your MCP host to start the published proxy with `npx`. No source checkout or global installation is required. Pin the daemon and proxy to the same package version; the IPC handshake rejects version mismatches. The `-y` flag prevents an installation prompt from blocking MCP startup.
@@ -104,6 +106,8 @@ Run the published `npx` command outside this repository, and avoid using this ch
 For source development, run `npm ci` and `npm run build`, then use `"command": "node"` with `"args": ["/path/to/mcp-server/dist/cli.js", "proxy"]`. Replace the path with the checkout's absolute path (a Windows path on Windows). This runs local code rather than the npm release.
 
 The MCP host starts only the proxy; it does not start the daemon. The proxy uses the default local IPC endpoint, a Windows Named Pipe or Linux Unix domain socket named `bookmarkdown-mcp`, and does not need the WebSocket pairing token. Start the daemon before using browser tools.
+
+The proxy prints a startup reminder to stderr. Its stdout contains only MCP protocol messages. Whether stderr is visible depends on the MCP host; extension connection logs appear in the daemon terminal.
 
 ## Security and privacy
 

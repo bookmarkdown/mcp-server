@@ -30,6 +30,7 @@ export class WebSocketBridgeServer {
   public constructor(
     private readonly config: BridgeConfig,
     private readonly connections: ConnectionManager,
+    private readonly onLog?: (message: string) => void,
   ) {
     this.#extensionIds = new Set(config.extensionIds);
     this.#webSocketServer = new WebSocketServer({
@@ -60,11 +61,13 @@ export class WebSocketBridgeServer {
         request.headers.host !== expectedHost ||
         extensionId === undefined
       ) {
+        this.onLog?.('Extension connection rejected: invalid Host, path, or Origin. Check the WebSocket URL and BOOKMARKDOWN_EXTENSION_IDS allowlist.');
         this.#rejectUpgrade(socket, 403, 'Forbidden');
         return;
       }
 
       if (this.#webSocketServer.clients.size >= this.config.maxConnections) {
+        this.onLog?.('Extension connection rejected: connection limit reached.');
         this.#rejectUpgrade(socket, 503, 'Service Unavailable');
         return;
       }
@@ -249,6 +252,11 @@ export class WebSocketBridgeServer {
       return;
     }
 
+    const identity = `${registration.displayName ?? hello.instanceId} (${hello.instanceId})`;
+    socket.once('close', () => {
+      this.onLog?.(`Extension disconnected: ${identity}.`);
+    });
+
     socket.send(
       JSON.stringify({
         type: 'hello-ack',
@@ -260,7 +268,9 @@ export class WebSocketBridgeServer {
       (error) => {
         if (error) {
           socket.terminate();
+          return;
         }
+        this.onLog?.(`Extension connected: ${identity}; protocol ${PROTOCOL_VERSION}.`);
       },
     );
   }
@@ -278,6 +288,7 @@ export class WebSocketBridgeServer {
           socket.terminate();
           return;
         }
+        this.onLog?.(`Extension connection test succeeded; protocol ${PROTOCOL_VERSION}. No persistent connection was registered.`);
         socket.close(1000, 'probe-complete');
       },
     );
@@ -288,6 +299,14 @@ export class WebSocketBridgeServer {
     reason: string,
     mode?: 'probe',
   ): void {
+    const hint = reason === 'unauthorized'
+      ? ' Check that the extension pairing token matches BOOKMARKDOWN_BRIDGE_TOKEN.'
+      : reason === 'unsupported-protocol-version'
+        ? ' Update the server and extension to compatible protocol versions.'
+        : reason === 'extension-id-mismatch'
+          ? ' Check the extension ID and BOOKMARKDOWN_EXTENSION_IDS allowlist.'
+          : '';
+    this.onLog?.(`Extension handshake rejected: ${reason}.${hint}`);
     if (socket.readyState !== WebSocket.OPEN) {
       socket.terminate();
       return;

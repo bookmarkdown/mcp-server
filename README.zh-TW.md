@@ -78,6 +78,8 @@ npx -y @bookmarkdown/mcp-server@0.2.1
 
 請讓 daemon 持續在此終端執行；按 `Ctrl+C` 停止。不要將配對 token 放入命令列參數、URL、記錄檔或原始碼管理。
 
+啟動時，daemon 會透過 stderr 印出實際 WebSocket URL、允許的 extension IDs，以及 BMD → 設定 → MCP 的串接步驟。配對 token 只顯示已設定，不會印出內容；請在 extension 填入相同的 `BOOKMARKDOWN_BRIDGE_TOKEN` 值。Log 會區分連線測試成功與正式連線，並顯示連線、離線及握手拒絕原因，不包含分頁 metadata 或操作 payload。使用 WSS 時，瀏覽器必須信任 server 憑證。
+
 ## 設定 MCP host
 
 設定 MCP host 透過 `npx` 啟動已發布的 proxy，不需 source checkout 或全域安裝。Daemon 與 proxy 請固定使用相同套件版本；IPC 握手會拒絕版本不一致的連線。`-y` 可避免安裝確認提示阻擋 MCP 啟動。
@@ -100,6 +102,8 @@ MCP host 的 PATH 必須能找到 `npx`。Windows 上若 host 需要 command shi
 從原始碼開發時，先執行 `npm ci` 與 `npm run build`，再用 `"command": "node"` 搭配 `"args": ["/path/to/mcp-server/dist/cli.js", "proxy"]`。請換成 checkout 的絕對路徑，Windows 使用 Windows 路徑。這會執行本機程式碼，而非 npm 發布版本。
 
 MCP host 只會啟動 proxy，不會啟動 daemon。Proxy 使用預設本機 IPC endpoint `bookmarkdown-mcp`，Windows 為 Named Pipe，Linux 為 Unix domain socket，不需要 WebSocket 配對 token。使用瀏覽器工具前，請先啟動 daemon。
+
+Proxy 會透過 stderr 顯示啟動提醒，stdout 只包含 MCP 協定訊息。是否能看到 stderr 取決於 MCP host；extension 連線 log 顯示於 daemon 終端。
 
 ## 安全與隱私
 

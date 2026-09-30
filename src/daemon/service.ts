@@ -48,6 +48,7 @@ export interface DaemonStartOptions {
   pipeName?: string;
   shutdownDrainMs?: number;
   signalTarget?: SignalTarget;
+  onLog?: (message: string) => void;
 }
 
 export type DaemonStartResult =
@@ -125,7 +126,11 @@ export class DaemonService {
       return { status: 'already_running' };
     }
 
-    const bridge = await BridgeService.createStrict(configResult.config);
+    const config = configResult.config;
+    const log = options.onLog
+      ? (message: string) => options.onLog?.(message.replaceAll(config.token, '[redacted]'))
+      : undefined;
+    const bridge = await BridgeService.createStrict(config, log);
     const daemon = new DaemonService(
       bridge,
       configResult.config,
@@ -142,6 +147,15 @@ export class DaemonService {
       );
       daemon.#state = 'ready';
       daemon.#installSignalHandlers();
+      log?.([
+        'Extension connection settings:',
+        `  WebSocket URL: ${daemon.webSocketUrl}`,
+        '  Pairing token: configured (hidden); use the same BOOKMARKDOWN_BRIDGE_TOKEN in the extension.',
+        `  Allowed extension IDs: ${config.runtimeMode === 'production' ? config.extensionIds.join(', ') : 'development mode; exact Chrome extension ID allowlist is not enforced'}`,
+        'Open BMD > Settings > MCP, enter the URL and pairing token, save, test the connection, then enable it.',
+        ...(config.tlsCertFile ? ['The browser must trust the server TLS certificate before connecting.'] : []),
+        'Waiting for an extension connection...',
+      ].join('\n'));
       return { status: 'started', daemon };
     } catch (error) {
       daemon.#state = 'closed';
