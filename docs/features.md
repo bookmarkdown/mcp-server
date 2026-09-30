@@ -7,7 +7,7 @@ ms.topic: reference
 
 ## 本機架構
 
-使用者手動在前景啟動 daemon。daemon 擁有 WebSocket listener、extension 連線、工具執行與記憶體內 instance 狀態。MCP host 啟動 stdio proxy；proxy 透過本機 IPC 將工具呼叫送往 daemon，不會代為啟動 daemon。Windows 使用 Named Pipe；Linux 使用位於每使用者私有目錄的 Unix domain socket。
+使用者手動在前景啟動 daemon。daemon 擁有 WebSocket listener、extension 連線、工具執行與記憶體內 instance 狀態。MCP host 啟動 stdio proxy；proxy 透過本機 IPC 將工具呼叫送往 daemon，不會代為啟動 daemon。Windows 使用 Named Pipe；Linux 與 macOS 使用位於每使用者私有目錄的 Unix domain socket。
 
 CLI 接受 `daemon` 或 `proxy`；省略子命令時預設啟動 `daemon`：
 
@@ -55,7 +55,7 @@ daemon 預設在 `127.0.0.1:38471` 接受 WebSocket 連線，可用 `BOOKMARKDOW
 
 IPC health 回覆包含 runtime mode，IPC protocol version 為 `3`。只有健康且模式相同的既有 daemon 才會被視為重複啟動；proxy 可連線至任一模式，不會以 runtime mode 篩選 daemon。
 
-proxy 與 daemon 使用有版本的本機 IPC。Windows 使用 Named Pipe，Linux 使用 Unix domain socket；每個 proxy session 維持自己的連線，daemon 可同時服務多個 proxy。主要工具錯誤如下：
+proxy 與 daemon 使用有版本的本機 IPC。Windows 使用 Named Pipe，Linux 與 macOS 使用 Unix domain socket；每個 proxy session 維持自己的連線，daemon 可同時服務多個 proxy。主要工具錯誤如下：
 
 | 錯誤碼 | 意義 |
 | --- | --- |

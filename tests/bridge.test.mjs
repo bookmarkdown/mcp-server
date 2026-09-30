@@ -19,8 +19,8 @@ const token = '0123456789abcdef0123456789abcdef0123456789abcdef';
 const instanceId = '7d8c2f92-12c8-4bd2-9701-12e602deaf01';
 const secondInstanceId = '9f35a930-b515-47e3-8bb5-c454f8de8c55';
 const supportedPlatforms = {
-  skip: !['win32', 'linux'].includes(process.platform)
-    ? 'Daemon bridge tests require Windows or Linux local IPC.'
+  skip: !['win32', 'linux', 'darwin'].includes(process.platform)
+    ? 'Daemon bridge tests require Windows, Linux, or macOS local IPC.'
     : false,
 };
 
@@ -72,6 +72,7 @@ async function startDaemonForTest(t, overrides = {}, options = {}) {
     runtimeMode: options.runtimeMode,
     pipeName,
     signalTarget: new EventEmitter(),
+    onLog: options.onLog,
   });
   assert.equal(daemonResult.status, 'started');
   if (daemonResult.status !== 'started') {
@@ -236,6 +237,55 @@ function browserSuccessResponse(requestId, data) {
     data,
   });
 }
+
+test('logs connection guidance, probes, lifecycle and rejections without credentials', supportedPlatforms, async (t) => {
+  const logs = [];
+  let disconnected;
+  const disconnectedPromise = new Promise((resolve) => { disconnected = resolve; });
+  const { client, port } = await startDaemonForTest(t, {}, {
+    onLog: (message) => {
+      logs.push(message);
+      if (message.startsWith('Extension disconnected:')) disconnected();
+    },
+  });
+  const bridge = { port };
+  assert.match(logs.join('\n'), new RegExp(`WebSocket URL: ws://127\\.0\\.0\\.1:${port}/`));
+  assert.match(logs.join('\n'), /Pairing token: configured \(hidden\)/);
+  assert.ok(logs.join('\n').includes(extensionId));
+  assert.match(logs.join('\n'), /save, test the connection, then enable/);
+
+  const probe = await connectExtension(bridge, { mode: 'probe', operations: [] });
+  t.after(() => probe.socket.terminate());
+  assert.equal(probe.acknowledgement.ok, true);
+  assert.match(logs.join('\n'), /connection test succeeded/);
+  await assert.rejects(
+    client.call('devices.list', { includeOffline: true, includeTabCounts: false }),
+    { code: 'EXTENSION_NOT_CONNECTED' },
+  );
+  assert.equal(logs.some((line) => line.startsWith('Extension connected:')), false);
+
+  const connected = await connectExtension(bridge, { displayName: token });
+  t.after(() => connected.socket.terminate());
+  assert.equal(connected.acknowledgement.ok, true);
+  assert.match(logs.join('\n'), /Extension connected: \[redacted\]/);
+  connected.socket.close();
+  await disconnectedPromise;
+  assert.match(logs.join('\n'), /Extension disconnected:/);
+
+  const rejectedToken = 'wrong-token-credential-that-must-not-be-logged';
+  const rejected = await connectExtension(bridge, { token: rejectedToken });
+  t.after(() => rejected.socket.terminate());
+  assert.equal(rejected.acknowledgement.reason, 'unauthorized');
+  assert.match(logs.join('\n'), /handshake rejected: unauthorized/);
+  const incompatible = await connectExtension(bridge, { protocolVersion: '999' });
+  t.after(() => incompatible.socket.terminate());
+  assert.equal(incompatible.acknowledgement.reason, 'unsupported-protocol-version');
+  assert.match(logs.join('\n'), /compatible protocol versions/);
+  assert.equal(await getUpgradeStatus(port, 'https://example.com'), 403);
+  assert.match(logs.join('\n'), /Check the WebSocket URL and BOOKMARKDOWN_EXTENSION_IDS/);
+  assert.equal(logs.join('\n').includes(token), false);
+  assert.equal(logs.join('\n').includes(rejectedToken), false);
+});
 
 test('fails daemon startup when the configured WebSocket port is occupied', supportedPlatforms, async () => {
   const occupied = createNetServer();

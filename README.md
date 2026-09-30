@@ -2,7 +2,7 @@
 
 [English](README.md) | [繁體中文](README.zh-TW.md)
 
-BookMarkdown MCP Server connects an MCP host to a companion browser extension. The daemon accepts the extension over WebSocket, using loopback by default; the MCP host communicates with a separate stdio proxy over local IPC, using Windows Named Pipes or Linux Unix domain sockets.
+BookMarkdown MCP Server connects an MCP host to a companion browser extension. The daemon accepts the extension over WebSocket, using loopback by default; the MCP host communicates with a separate stdio proxy over local IPC, using Windows Named Pipes or Linux/macOS Unix domain sockets.
 
 > [!IMPORTANT]
 > Published npm version `0.2.0` supports Windows and Linux. Its package passed
@@ -31,7 +31,7 @@ See [Features and limitations (Traditional Chinese)](docs/features.md), [Archite
 
 ## Requirements
 
-* Windows or Linux
+* Windows, Linux, or macOS (macOS requires the release containing this change; `0.2.1` and earlier do not support macOS)
 * Node.js 24.11.0 or later
 * npm
 * A compatible companion browser extension (maintained separately)
@@ -41,7 +41,7 @@ See [Features and limitations (Traditional Chinese)](docs/features.md), [Archite
 You can run the published CLI without a global installation:
 
 ```bash
-npx -y @bookmarkdown/mcp-server@0.2.1
+npx -y @bookmarkdown/mcp-server@latest
 ```
 
 Set the required environment variables below before starting the daemon. Alternatively, install the CLI globally:
@@ -69,18 +69,20 @@ The CLI starts the production daemon when you omit the subcommand. The productio
 ```powershell
 $env:BOOKMARKDOWN_BRIDGE_TOKEN = (node -p "require('node:crypto').randomBytes(32).toString('hex')")
 $env:BOOKMARKDOWN_EXTENSION_IDS = "<32-character-extension-id>"
-npx -y @bookmarkdown/mcp-server@0.2.1
+npx -y @bookmarkdown/mcp-server@latest
 ```
 
 ```bash
 export BOOKMARKDOWN_BRIDGE_TOKEN="$(node -p "require('node:crypto').randomBytes(32).toString('hex')")"
 export BOOKMARKDOWN_EXTENSION_IDS="<32-character-extension-id>"
-npx -y @bookmarkdown/mcp-server@0.2.1
+npx -y @bookmarkdown/mcp-server@latest
 ```
 
 For a global installation, use `bookmarkdown-mcp-server`; for a built source checkout, use `npm start`.
 
 Keep the daemon running in this terminal. Press `Ctrl+C` to stop it. Do not put the pairing token in command-line arguments, URLs, logs, or source control.
+
+At startup, the daemon prints the actual WebSocket URL, allowed extension IDs, and BMD > Settings > MCP connection instructions to stderr. The pairing token is marked as configured but never printed; enter the same `BOOKMARKDOWN_BRIDGE_TOKEN` value in the extension. Logs distinguish a successful connection test from a persistent connection and report connection, disconnection, and handshake rejection reasons. They do not include tab metadata or operation payloads. With WSS, the browser must trust the server certificate.
 
 ## Configure an MCP host
 
@@ -91,7 +93,7 @@ Configure your MCP host to start the published proxy with `npx`. No source check
   "mcpServers": {
     "bookmarkdown": {
         "command": "npx",
-        "args": ["-y", "@bookmarkdown/mcp-server@0.2.1", "proxy"]
+        "args": ["-y", "@bookmarkdown/mcp-server@latest", "proxy"]
     }
   }
 }
@@ -103,7 +105,9 @@ Run the published `npx` command outside this repository, and avoid using this ch
 
 For source development, run `npm ci` and `npm run build`, then use `"command": "node"` with `"args": ["/path/to/mcp-server/dist/cli.js", "proxy"]`. Replace the path with the checkout's absolute path (a Windows path on Windows). This runs local code rather than the npm release.
 
-The MCP host starts only the proxy; it does not start the daemon. The proxy uses the default local IPC endpoint, a Windows Named Pipe or Linux Unix domain socket named `bookmarkdown-mcp`, and does not need the WebSocket pairing token. Start the daemon before using browser tools.
+The MCP host starts only the proxy; it does not start the daemon. The proxy uses the default local IPC endpoint named `bookmarkdown-mcp`, a Windows Named Pipe or Linux/macOS Unix domain socket, and does not need the WebSocket pairing token. Start the daemon before using browser tools. On macOS, the socket lives under `/tmp/bookmarkdown-<uid>/` to avoid long `TMPDIR` paths; the directory and socket are restricted to the current user with modes `0700` and `0600`.
+
+The proxy prints a startup reminder to stderr. Its stdout contains only MCP protocol messages. Whether stderr is visible depends on the MCP host; extension connection logs appear in the daemon terminal.
 
 ## Security and privacy
 

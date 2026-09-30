@@ -207,10 +207,10 @@ test('dispatches daemon mode to daemon startup and reports invalid configuration
 });
 
 test(
-  'runs the CLI through a symlinked npm bin entry on Linux',
+  'runs the CLI through a symlinked npm bin entry on Linux and macOS',
   {
-    skip: process.platform !== 'linux'
-      ? 'npm uses symlinked bin entries on Linux'
+    skip: !['linux', 'darwin'].includes(process.platform)
+      ? 'npm uses symlinked bin entries on Linux and macOS'
       : false,
   },
   async (t) => {
@@ -304,13 +304,15 @@ test('dispatches proxy mode without a daemon and keeps MCP on stdout', async (t)
     'DAEMON_UNAVAILABLE',
   );
   assert.equal(proxy.stderr.includes('listening'), false);
+  assert.match(proxy.stderr, /MCP stdio proxy started/);
+  assert.match(proxy.stderr, /Start the daemon separately/);
   for (const line of proxy.stdout.split('\n').filter(Boolean)) {
     assert.equal(JSON.parse(line).jsonrpc, '2.0');
   }
 });
 
 test('starts the built daemon CLI and releases its listeners on shutdown', {
-  skip: !['win32', 'linux'].includes(process.platform),
+  skip: !['win32', 'linux', 'darwin'].includes(process.platform),
 }, async (t) => {
   const reserved = createNetServer();
   await new Promise((resolve, reject) => {
@@ -361,6 +363,9 @@ test('starts the built daemon CLI and releases its listeners on shutdown', {
   assert.equal(stdout, '');
   assert.equal(stderr.includes(cliToken), false);
   assert.ok(stderr.includes(getLocalPipePath(pipeName)));
+  assert.ok(stderr.includes(`WebSocket URL: ws://127.0.0.1:${address.port}/`));
+  assert.match(stderr, /Pairing token: configured \(hidden\)/);
+  assert.match(stderr, /Waiting for an extension connection/);
   assert.equal(child.kill('SIGINT'), true);
   let exitTimer;
   try {
@@ -381,7 +386,7 @@ test('starts the built daemon CLI and releases its listeners on shutdown', {
   });
   await new Promise((resolve) => rebound.close(resolve));
   await assert.rejects(new Promise((resolve, reject) => {
-    const socket = createConnection(`\\\\.\\pipe\\${pipeName}`);
+    const socket = createConnection(getLocalPipePath(pipeName));
     socket.once('connect', () => { socket.destroy(); resolve(); });
     socket.once('error', reject);
   }));

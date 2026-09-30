@@ -32,7 +32,8 @@
   },
   "os": [
     "win32",
-    "linux"
+    "linux",
+    "darwin"
   ],
   "publishConfig": {
     "access": "public"

@@ -10,8 +10,8 @@ const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const daemonServiceUrl = new URL('../dist/daemon/service.js', import.meta.url).href;
 const proxyServiceUrl = new URL('../dist/proxy/service.js', import.meta.url).href;
 const supportedPlatforms = {
-  skip: !['win32', 'linux'].includes(process.platform)
-    ? 'Daemon/proxy process tests require Windows or Linux local IPC.'
+  skip: !['win32', 'linux', 'darwin'].includes(process.platform)
+    ? 'Daemon/proxy process tests require Windows, Linux, or macOS local IPC.'
     : false,
 };
 const extensionId = 'a'.repeat(32);

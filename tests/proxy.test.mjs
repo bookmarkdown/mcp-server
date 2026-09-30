@@ -16,8 +16,8 @@ const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const proxyServiceUrl = new URL('../src/proxy/service.ts', import.meta.url).href;
 const localPackageVersion = packageMetadata.version;
 const supportedPlatforms = {
-  skip: !['win32', 'linux'].includes(process.platform)
-    ? 'Proxy tests require Windows or Linux local IPC.'
+  skip: !['win32', 'linux', 'darwin'].includes(process.platform)
+    ? 'Proxy tests require Windows, Linux, or macOS local IPC.'
     : false,
 };
 
@@ -193,7 +193,7 @@ async function startFakeDaemon(t, pipeName, options = {}) {
   }
 
   const endpointPath = pipePath(pipeName);
-  if (process.platform === 'linux') {
+  if (process.platform !== 'win32') {
     await mkdir(dirname(endpointPath), { recursive: true, mode: 0o700 });
   }
   await new Promise((resolve, reject) => {

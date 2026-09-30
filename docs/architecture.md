@@ -16,7 +16,7 @@ flowchart LR
     U["使用者"] -->|"啟動本機 daemon"| D["BookMarkdown 本機 server<br/>WebSocket、連線狀態與工具處理"]
     C["Chrome extension"] -->|"WebSocket<br/>default loopback or private-IP WSS"| D
     A["本機 Agent / MCP host"] -->|"MCP stdio"| P["MCP proxy<br/>工具呼叫轉送"]
-    P <-->|"本機 IPC<br/>Windows Named Pipe / Linux Unix socket"| D
+    P <-->|"本機 IPC<br/>Windows Named Pipe / Linux/macOS Unix socket"| D
 ```
 
 Daemon 僅在使用者需要時執行。MCP host 啟動 proxy；proxy 即使 daemon 離線仍可提供 MCP initialize 與工具清單，並在工具呼叫時檢查 daemon 和 extension 狀態。Proxy 不持有 extension 連線或業務狀態。
@@ -25,14 +25,14 @@ Daemon 僅在使用者需要時執行。MCP host 啟動 proxy；proxy 即使 dae
 
 同一個 npm package 使用單一 CLI binary，透過 `daemon` 與 `proxy` 子命令啟動本機 server 和 MCP proxy；省略子命令時預設為 `daemon`。從 source checkout 執行 `npm start`、`npm start -- daemon`、`node dist/cli.js` 與 `node dist/cli.js daemon` 會啟動正式模式 daemon；正式模式要求 `BOOKMARKDOWN_EXTENSION_IDS`。從 checkout 執行 `npm start -- proxy` 或 `node dist/cli.js proxy` 會啟動 MCP proxy。`npm run dev -- daemon` 透過明確的 development entrypoint 啟動開發模式，不需要固定 extension ID 清單，也不依 `NODE_ENV` 判斷模式。兩種模式都要求 `BOOKMARKDOWN_BRIDGE_TOKEN`，並可設定 `BOOKMARKDOWN_WS_PORT`。WebSocket 預設綁定 `127.0.0.1`；區網模式使用 `BOOKMARKDOWN_WS_HOST` 搭配 TLS certificate/key。proxy 可連線至任一 daemon mode。
 
-目前已發布的 `@bookmarkdown/mcp-server@0.1.3` 僅支援 Windows；Linux 支援可從 source checkout 使用，並將於後續套件版本提供。
+目前 source checkout 支援 Windows、Linux 與 macOS；macOS 支援需使用包含此變更的新版套件，既有 `0.2.1` 套件僅支援 Windows 與 Linux。
 
 ## 程序責任
 
 * Daemon 維護 WebSocket listener、已認證的 extension connections、request routing、MCP tools 的實際處理，以及 process-local 的連線狀態。狀態不落盤；daemon 重啟後由 extension 重連並重新註冊。
 * Proxy 提供 MCP stdio endpoint，使用 package 共用的靜態 tool schema 回應 initialize 與 tools/list；tools/call 透過 IPC 交給 daemon 執行。Proxy 不執行 browser 業務邏輯，也不會啟動 daemon。
 * 每個 proxy session 維持一條 IPC 長連線，同一 daemon 可同時接受多個 proxy。IPC 協定須定義 framing、schema、session/request ID 關聯、取消、逾時、斷線處理和 payload 上限。
-* Windows 使用 Named Pipe，Linux 使用每使用者私有目錄中的 Unix domain socket；同一 daemon 可服務多個 proxy session。
+* Windows 使用 Named Pipe，Linux 與 macOS 使用每使用者私有目錄中的 Unix domain socket；同一 daemon 可服務多個 proxy session。
 
 目前 browser RPC 僅允許計數、分頁 metadata 清單、開啟、關閉與跨視窗移動分頁。Extension 必須依 capabilities 回應，並在計數與清單中排除 incognito 視窗和分頁。標題與 URL 是敏感 metadata；不提供頁面內容。開啟、關閉與移動的結果不明時不得自動重送。
 
@@ -60,6 +60,6 @@ Daemon 僅在使用者需要時執行。MCP host 啟動 proxy；proxy 即使 dae
 
 ## 實作與驗證
 
-daemon/proxy 拆分、Windows Named Pipe 與 Linux Unix domain socket IPC、health/version handshake、共用工具目錄與 CLI 子命令已實作於此 repository。
+daemon/proxy 拆分、Windows Named Pipe 與 Linux/macOS Unix domain socket IPC、health/version handshake、共用工具目錄與 CLI 子命令已實作於此 repository。macOS 使用 `/tmp/bookmarkdown-<uid>/` 中的 socket，避開較長的 `TMPDIR` 與 104-byte 路徑上限；Linux 維持既有暫存目錄。兩者都驗證目錄擁有者、設定目錄 `0700` 與 socket `0600`，並只清理同使用者擁有的失效 socket。
 一般 Node.js 測試涵蓋本機 IPC、WebSocket 認證、Linux 私有介面上的 WSS 與 proxy 行為；這些測試不代表真實 Chrome/extension、Chrome Local Network Access、extension 權限或指定 MCP host 的互通性已驗證。
 Companion extension 的重連實作在本 repository 範圍之外，且尚無重連退避專項測試。

@@ -22,7 +22,7 @@ package was also installed from the npm registry and initialized on Ubuntu.
 * `feature/<name>`, `fix/<name>`, and `docs/<name>` are short-lived pull request branches created from `main`.
 * `changeset-release/main` is managed by Changesets. Do not create or edit a second version branch manually.
 
-Protect `main` with pull requests and required Ubuntu and Windows CI checks.
+Protect `main` with pull requests and required Ubuntu, Windows, and macOS CI checks.
 Restrict creation of `v*` tags to release maintainers.
 
 In repository settings, allow GitHub Actions to create pull requests. The Changesets workflow needs this permission to open its version pull request.
@@ -56,7 +56,7 @@ Changes that do not affect the npm artifact do not need a Changeset. When uncert
    documentation, and Changeset in the same pull request.
 2. Run `npm test`, `npm run typecheck`, and `npm run verify:pack` locally. Push
    only after these checks pass.
-3. Merge the pull request to `main` after Ubuntu and Windows CI pass.
+3. Merge the pull request to `main` after Ubuntu, Windows, and macOS CI pass.
 4. Review the automated Version Packages pull request. Merge it after CI passes.
 5. Confirm the npm Trusted Publisher configuration before creating a tag.
 6. Tag the current `main` commit as `vX.Y.Z` and push only that tag.

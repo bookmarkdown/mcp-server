@@ -88,11 +88,15 @@ export class BridgeService {
     return service;
   }
 
-  public static async createStrict(config: BridgeConfig): Promise<BridgeService> {
+  public static async createStrict(
+    config: BridgeConfig,
+    onLog?: (message: string) => void,
+  ): Promise<BridgeService> {
     const service = new BridgeService(config);
     const webSocketServer = new WebSocketBridgeServer(
       config,
       service.#connections,
+      onLog,
     );
 
     try {

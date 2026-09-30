@@ -2,7 +2,7 @@
 
 [English](README.md) | [繁體中文](README.zh-TW.md)
 
-BookMarkdown MCP Server 讓 MCP host 與 companion browser extension 溝通。Daemon 預設透過 loopback WebSocket 接受 extension 連線；MCP host 則透過本機 IPC 與獨立的 stdio proxy 通訊，Windows 使用 Named Pipe，Linux 使用 Unix domain socket。
+BookMarkdown MCP Server 讓 MCP host 與 companion browser extension 溝通。Daemon 預設透過 loopback WebSocket 接受 extension 連線；MCP host 則透過本機 IPC 與獨立的 stdio proxy 通訊，Windows 使用 Named Pipe，Linux 與 macOS 使用 Unix domain socket。
 
 > [!IMPORTANT]
 > 已發布至 npm 的 `0.2.0` 支援 Windows 與 Linux，並已在 Ubuntu 與 Windows 通過乾淨安裝及 MCP initialize smoke test。真實 Chrome、companion extension、Chrome Local Network Access 與指定 MCP host 的相容性仍未驗證。選用的區網連線需要 WSS，且 companion extension 必須設定為連線至伺服器 URL。
@@ -27,7 +27,7 @@ Server 提供以下 MCP tools：
 
 ## 需求
 
-* Windows 或 Linux
+* Windows、Linux 或 macOS（macOS 需使用包含此變更的新版；`0.2.1` 與更早版本不支援 macOS）
 * Node.js 24.11.0 或更新版本
 * npm
 * 相容的 companion browser extension，另行維護
@@ -37,7 +37,7 @@ Server 提供以下 MCP tools：
 不需全域安裝，即可執行已發布的 CLI：
 
 ```bash
-npx -y @bookmarkdown/mcp-server@0.2.1
+npx -y @bookmarkdown/mcp-server@latest
 ```
 
 啟動 daemon 前，請先設定下方列出的必要環境變數。也可以選擇全域安裝：
@@ -65,18 +65,20 @@ npm run build
 ```powershell
 $env:BOOKMARKDOWN_BRIDGE_TOKEN = (node -p "require('node:crypto').randomBytes(32).toString('hex')")
 $env:BOOKMARKDOWN_EXTENSION_IDS = "<32-character-extension-id>"
-npx -y @bookmarkdown/mcp-server@0.2.1
+npx -y @bookmarkdown/mcp-server@latest
 ```
 
 ```bash
 export BOOKMARKDOWN_BRIDGE_TOKEN="$(node -p "require('node:crypto').randomBytes(32).toString('hex')")"
 export BOOKMARKDOWN_EXTENSION_IDS="<32-character-extension-id>"
-npx -y @bookmarkdown/mcp-server@0.2.1
+npx -y @bookmarkdown/mcp-server@latest
 ```
 
 全域安裝可改用 `bookmarkdown-mcp-server`；已建置的 source checkout 可改用 `npm start`。
 
 請讓 daemon 持續在此終端執行；按 `Ctrl+C` 停止。不要將配對 token 放入命令列參數、URL、記錄檔或原始碼管理。
+
+啟動時，daemon 會透過 stderr 印出實際 WebSocket URL、允許的 extension IDs，以及 BMD → 設定 → MCP 的串接步驟。配對 token 只顯示已設定，不會印出內容；請在 extension 填入相同的 `BOOKMARKDOWN_BRIDGE_TOKEN` 值。Log 會區分連線測試成功與正式連線，並顯示連線、離線及握手拒絕原因，不包含分頁 metadata 或操作 payload。使用 WSS 時，瀏覽器必須信任 server 憑證。
 
 ## 設定 MCP host
 
@@ -87,7 +89,7 @@ npx -y @bookmarkdown/mcp-server@0.2.1
   "mcpServers": {
     "bookmarkdown": {
         "command": "npx",
-        "args": ["-y", "@bookmarkdown/mcp-server@0.2.1", "proxy"]
+        "args": ["-y", "@bookmarkdown/mcp-server@latest", "proxy"]
     }
   }
 }
@@ -99,7 +101,9 @@ MCP host 的 PATH 必須能找到 `npx`。Windows 上若 host 需要 command shi
 
 從原始碼開發時，先執行 `npm ci` 與 `npm run build`，再用 `"command": "node"` 搭配 `"args": ["/path/to/mcp-server/dist/cli.js", "proxy"]`。請換成 checkout 的絕對路徑，Windows 使用 Windows 路徑。這會執行本機程式碼，而非 npm 發布版本。
 
-MCP host 只會啟動 proxy，不會啟動 daemon。Proxy 使用預設本機 IPC endpoint `bookmarkdown-mcp`，Windows 為 Named Pipe，Linux 為 Unix domain socket，不需要 WebSocket 配對 token。使用瀏覽器工具前，請先啟動 daemon。
+MCP host 只會啟動 proxy，不會啟動 daemon。Proxy 使用預設本機 IPC endpoint `bookmarkdown-mcp`，Windows 為 Named Pipe，Linux 與 macOS 為 Unix domain socket，不需要 WebSocket 配對 token。使用瀏覽器工具前，請先啟動 daemon。macOS 的 socket 放在 `/tmp/bookmarkdown-<uid>/`，避免過長的 `TMPDIR`；目錄與 socket 分別限制為目前使用者的 `0700` 與 `0600` 權限。
+
+Proxy 會透過 stderr 顯示啟動提醒，stdout 只包含 MCP 協定訊息。是否能看到 stderr 取決於 MCP host；extension 連線 log 顯示於 daemon 終端。
 
 ## 安全與隱私
 

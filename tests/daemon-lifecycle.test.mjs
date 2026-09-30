@@ -20,8 +20,8 @@ import {
 } from '../dist/ipc/transport.js';
 
 const supportedPlatforms = {
-  skip: !['win32', 'linux'].includes(process.platform)
-    ? 'Daemon lifecycle tests require Windows or Linux local IPC.'
+  skip: !['win32', 'linux', 'darwin'].includes(process.platform)
+    ? 'Daemon lifecycle tests require Windows, Linux, or macOS local IPC.'
     : false,
 };
 const extensionId = 'a'.repeat(32);
