@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { stat } from 'node:fs/promises';
 import { dirname } from 'node:path';
@@ -10,8 +11,8 @@ import {
 } from '../src/ipc/transport.ts';
 
 const supportedPlatforms = {
-  skip: !['win32', 'linux'].includes(process.platform)
-    ? 'Local IPC transport tests require Windows or Linux.'
+  skip: !['win32', 'linux', 'darwin'].includes(process.platform)
+    ? 'Local IPC transport tests require Windows, Linux, or macOS.'
     : false,
 };
 
@@ -191,8 +192,8 @@ test('rejects unbounded connection deadlines before creating a socket', supporte
   await assert.rejects(connectLocalPipe(uniquePipeName(), { timeoutMs: 30001 }), RangeError);
 });
 
-test('restricts Linux Unix socket access to the current user', {
-  skip: process.platform !== 'linux',
+test('restricts Unix socket access to the current user', {
+  skip: !['linux', 'darwin'].includes(process.platform),
 }, async (t) => {
   const { pipeName, server } = await startServer(t, () => {});
   const socketPath = getLocalPipePath(pipeName);
@@ -203,7 +204,38 @@ test('restricts Linux Unix socket access to the current user', {
 
   assert.equal(directoryStats.mode & 0o777, 0o700);
   assert.equal(socketStats.mode & 0o777, 0o600);
+  assert.equal(directoryStats.uid, process.getuid());
+  assert.equal(socketStats.uid, process.getuid());
 
   await server.close();
   await assert.rejects(stat(socketPath), { code: 'ENOENT' });
+});
+
+test('keeps macOS socket paths short even with a long TMPDIR and IPC name', () => {
+  const transportUrl = new URL('../dist/ipc/transport.js', import.meta.url).href;
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
+    import assert from 'node:assert/strict';
+    import { getLocalPipePath } from ${JSON.stringify(transportUrl)};
+    Object.defineProperty(process, 'platform', {value: 'darwin'});
+    process.getuid = () => 501;
+    process.env.TMPDIR = '/var/folders/' + 'long-path/'.repeat(20);
+    const path = getLocalPipePath('x'.repeat(128));
+    assert.match(path.replaceAll(String.fromCharCode(92), '/'), /^\\/tmp\\/bookmarkdown-501\\/[a-f0-9]{16}\\.sock$/);
+    assert.ok(Buffer.byteLength(path, 'utf8') < 104);
+    assert.equal(path, getLocalPipePath('x'.repeat(128)));
+    assert.notEqual(path, getLocalPipePath('y'.repeat(128)));
+  `], {encoding: 'utf8'});
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test('refuses an active Unix socket without disrupting its listener', {
+  skip: !['linux', 'darwin'].includes(process.platform),
+}, async (t) => {
+  const { pipeName } = await startServer(t, echoRequests);
+  await assert.rejects(listenLocalPipe(pipeName, () => {}, () => {}), {code: 'EADDRINUSE'});
+  const client = await connectLocalPipe(pipeName);
+  t.after(() => client.destroy());
+  assert.deepEqual(await sendRequest(client, {id: 'still-active', value: 'preserved'}), {
+    id: 'still-active', value: 'preserved',
+  });
 });

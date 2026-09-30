@@ -19,8 +19,8 @@ const token = '0123456789abcdef0123456789abcdef0123456789abcdef';
 const instanceId = '7d8c2f92-12c8-4bd2-9701-12e602deaf01';
 const secondInstanceId = '9f35a930-b515-47e3-8bb5-c454f8de8c55';
 const supportedPlatforms = {
-  skip: !['win32', 'linux'].includes(process.platform)
-    ? 'Daemon bridge tests require Windows or Linux local IPC.'
+  skip: !['win32', 'linux', 'darwin'].includes(process.platform)
+    ? 'Daemon bridge tests require Windows, Linux, or macOS local IPC.'
     : false,
 };
 

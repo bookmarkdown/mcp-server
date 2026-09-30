@@ -207,10 +207,10 @@ test('dispatches daemon mode to daemon startup and reports invalid configuration
 });
 
 test(
-  'runs the CLI through a symlinked npm bin entry on Linux',
+  'runs the CLI through a symlinked npm bin entry on Linux and macOS',
   {
-    skip: process.platform !== 'linux'
-      ? 'npm uses symlinked bin entries on Linux'
+    skip: !['linux', 'darwin'].includes(process.platform)
+      ? 'npm uses symlinked bin entries on Linux and macOS'
       : false,
   },
   async (t) => {
@@ -312,7 +312,7 @@ test('dispatches proxy mode without a daemon and keeps MCP on stdout', async (t)
 });
 
 test('starts the built daemon CLI and releases its listeners on shutdown', {
-  skip: !['win32', 'linux'].includes(process.platform),
+  skip: !['win32', 'linux', 'darwin'].includes(process.platform),
 }, async (t) => {
   const reserved = createNetServer();
   await new Promise((resolve, reject) => {
@@ -386,7 +386,7 @@ test('starts the built daemon CLI and releases its listeners on shutdown', {
   });
   await new Promise((resolve) => rebound.close(resolve));
   await assert.rejects(new Promise((resolve, reject) => {
-    const socket = createConnection(`\\\\.\\pipe\\${pipeName}`);
+    const socket = createConnection(getLocalPipePath(pipeName));
     socket.once('connect', () => { socket.destroy(); resolve(); });
     socket.once('error', reject);
   }));

@@ -6,7 +6,6 @@ import { createConnection, createServer, type Socket } from 'node:net';
 
 const pipeNamePattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const pipePrefix = '\\\\.\\pipe\\';
-const unixSocketPathLimit = 108;
 
 export type LocalPipeConnectionHandler = (socket: Socket) => void;
 export type LocalPipeErrorHandler = (error: Error) => void;
@@ -25,12 +24,16 @@ export function getLocalPipePath(pipeName: string): string {
   if (process.platform === 'win32') {
     return `${pipePrefix}${pipeName}`;
   }
-  if (process.platform !== 'linux') {
-    throw new Error('Local IPC transport is supported on Windows and Linux only.');
+  if (process.platform !== 'linux' && process.platform !== 'darwin') {
+    throw new Error('Local IPC transport is supported on Windows, Linux, and macOS only.');
   }
 
   const nameHash = createHash('sha256').update(pipeName).digest('hex').slice(0, 16);
-  const socketPath = join(tmpdir(), `bookmarkdown-${currentUserId()}`, `${nameHash}.sock`);
+  // macOS TMPDIR can exceed sun_path's 104-byte limit; use a short, private
+  // per-user directory under /tmp instead. Linux keeps its existing endpoint.
+  const runtimeRoot = process.platform === 'darwin' ? '/tmp' : tmpdir();
+  const unixSocketPathLimit = process.platform === 'darwin' ? 104 : 108;
+  const socketPath = join(runtimeRoot, `bookmarkdown-${currentUserId()}`, `${nameHash}.sock`);
   if (Buffer.byteLength(socketPath, 'utf8') >= unixSocketPathLimit) {
     throw new RangeError('The local IPC runtime path is too long for a Unix domain socket.');
   }
@@ -43,7 +46,7 @@ export async function listenLocalPipe(
   onError: LocalPipeErrorHandler,
 ): Promise<LocalPipeServer> {
   const endpointPath = getLocalPipePath(pipeName);
-  if (process.platform === 'linux') {
+  if (process.platform !== 'win32') {
     await prepareUnixSocketPath(endpointPath);
   }
 
@@ -82,7 +85,7 @@ export async function listenLocalPipe(
     server.listen(endpointPath);
   });
 
-  if (process.platform === 'linux') {
+  if (process.platform !== 'win32') {
     try {
       await chmod(endpointPath, 0o600);
     } catch (error) {
@@ -273,7 +276,7 @@ function errorCode(error: unknown): string | undefined {
 
 function currentUserId(): number {
   if (typeof process.getuid !== 'function') {
-    throw new Error('The Linux IPC transport requires the current user ID.');
+    throw new Error('The Unix IPC transport requires the current user ID.');
   }
   return process.getuid();
 }

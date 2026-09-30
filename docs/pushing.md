@@ -87,7 +87,7 @@ branch 修正、重新完成本機驗證，再追加一次 push。
 ### 5. 建立並合併 pull request
 
 1. 在 GitHub 建立從目前 branch 到 `main` 的 pull request。
-2. 確認 Ubuntu 與 Windows CI 都成功。
+2. 確認 Ubuntu、Windows 與 macOS CI 都成功。
 3. 使用 squash merge 合併。
 4. 在 GitHub 刪除已合併的 remote branch。
 5. 同步本機並刪除 local branch。
@@ -111,7 +111,7 @@ Packages pull request，其 branch 是 `changeset-release/main`。
 
 * 尚未準備發布時，保持 Version Packages pull request 開啟。
 * 準備發布時，確認版本、`CHANGELOG.md`、`package-lock.json` 與 CI 結果。
-* Ubuntu 與 Windows CI 都成功後，才 squash merge 到 `main`。
+* Ubuntu、Windows 與 macOS CI 都成功後，才 squash merge 到 `main`。
 * 不要另開 version branch，也不要直接修改自動產生的 branch。
 
 > [!IMPORTANT]
