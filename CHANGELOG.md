@@ -1,5 +1,16 @@
 # @bookmarkdown/mcp-server
 
+## 0.3.0
+
+### Minor Changes
+
+- 78e7620: Print extension connection instructions and credential-redacted lifecycle diagnostics to stderr, including probe success and handshake rejection hints. Add a proxy startup reminder while preserving MCP-only stdout.
+- 78e7620: Support macOS installation and daemon/proxy IPC using a private per-user Unix domain socket under /tmp. Keep paths below the macOS socket limit and validate CLI, IPC permissions, lifecycle, routing, and clean package installation on macOS in GitHub Actions.
+
+### Patch Changes
+
+- ff1ac99: Add a step-by-step push and release workflow for maintainers.
+
 ## 0.2.1
 
 ### Patch Changes
