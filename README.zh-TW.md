@@ -28,7 +28,7 @@ Server 提供以下 MCP tools：
 ## 需求
 
 * Windows、Linux 或 macOS（macOS 需使用包含此變更的新版；`0.2.1` 與更早版本不支援 macOS）
-* Node.js 24.11.0 或更新版本
+* Node.js 22.23.3 或更新版本
 * npm
 * 相容的 companion browser extension，另行維護
 

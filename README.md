@@ -32,7 +32,7 @@ See [Features and limitations (Traditional Chinese)](docs/features.md), [Archite
 ## Requirements
 
 * Windows, Linux, or macOS (macOS requires the release containing this change; `0.2.1` and earlier do not support macOS)
-* Node.js 24.11.0 or later
+* Node.js 22.23.3 or later
 * npm
 * A compatible companion browser extension (maintained separately)
 

@@ -40,7 +40,7 @@ Extension 必須在計數與清單中排除 incognito 視窗和分頁；server �
 
 ## 實作與驗證
 
-* 使用 Node.js `24.11.0` 或更新版本，使用 npm 與 `package-lock.json`；變更 dependencies 時同步更新 lockfile。Source checkout 支援 Windows、Linux 與 macOS；Windows IPC 使用 Named Pipe，Linux/macOS 使用 Unix domain socket。macOS socket 使用 `/tmp` 下的每使用者私有目錄，以避開較長的 `TMPDIR` 與 104-byte 路徑上限。
+* 使用 Node.js `22.23.3` 或更新版本，使用 npm 與 `package-lock.json`；變更 dependencies 時同步更新 lockfile。Source checkout 支援 Windows、Linux 與 macOS；Windows IPC 使用 Named Pipe，Linux/macOS 使用 Unix domain socket。macOS socket 使用 `/tmp` 下的每使用者私有目錄，以避開較長的 `TMPDIR` 與 104-byte 路徑上限。
 * 安裝後可執行 `npm test`、`npm run typecheck`、`npm run build`。`npm test` 會先 build 再執行 `node:test`。
 * 新增或修改 WebSocket 行為時，使用一般 Node.js WebSocket client 測試握手、驗證、request/response 關聯、逾時、斷線、限制與 MCP 結果。測試不得依賴 Chrome 或未實作的 extension。
 * 每次修改後先跑能檢查該行為的窄測試，再依風險執行完整測試、typecheck 和 build。不要宣稱未執行的檢查已通過。
