@@ -1,7 +1,7 @@
 ---
 title: "瀏覽器整合指南"
 description: "瀏覽器 extension 連線至 BookMarkdown MCP Server loopback 或 TLS 保護的區網 WebSocket 協定與 client 範例。"
-ms.date: 2026-09-29
+ms.date: 2026-10-02
 ms.topic: how-to
 ---
 
@@ -10,6 +10,10 @@ ms.topic: how-to
 此 repository 的 server 實作 protocol v2 handshake、probe 與 browser RPC，Node.js 測試涵蓋 loopback 及 Linux 私有介面上的 WSS contract。區網 listener 不代表 companion extension 已支援遠端 URL：extension 必須能設定伺服器 `wss://` 位址並信任其憑證。真實 Chrome extension 互通性、extension 權限、Chrome Local Network Access，以及指定 MCP host 的相容性驗證仍未完成。以下 JavaScript 示範 server 接受的訊息形狀。
 
 Browser integration 文件應涵蓋的範圍與維護規則見[文件規約](documentation-conventions.md)。
+
+## Agent 連線
+
+Agent 直接透過 daemon 的 MCP Streamable HTTP `/mcp` endpoint 呼叫，不再啟動 stdio proxy 或使用 IPC。預設 HTTP URL 為 `http://127.0.0.1:38472/mcp`，使用獨立的 `BOOKMARKDOWN_MCP_TOKEN` Bearer header。Extension 仍透過下列 WebSocket contract 與 `BOOKMARKDOWN_BRIDGE_TOKEN` 配對；其協定版本與 browser RPC 不變。HTTP 設定見 [README](../README.zh-TW.md)。
 
 ## 連線條件
 
@@ -250,7 +254,11 @@ server 目前使用的拒絕原因如下：
 
 所有 response 必須在收到 request 的同一條 WebSocket 上回覆，並沿用相同 UUID `requestId`。不同 socket 上的回覆、未知 ID 或逾時後才抵達的回覆會被忽略；多個請求可以依 UUID 配對，不必依送出順序回覆。
 
-操作失敗時可回覆下列 strict error shape。`name` 與 `code` 不可為空且最多 128 字元；`message` 最多 1024 字元。Server 會將 extension error 映射為 `EXTENSION_OPERATION_FAILED`，不會轉送敏感 payload。開啟、關閉或移動分頁若逾時或斷線，結果可能不明；server/proxy 不會自動重送。
+多個 agent 可同時透過 HTTP 呼叫同一 daemon，並使用相同的 MCP JSON-RPC `id`。該 `id` 與 WebSocket UUID `requestId` 是不同層級；extension 只需沿用收到的 WebSocket UUID，不需辨識 agent。Daemon 依 UUID 與來源 WebSocket `connectionId` 完成對應的 browser RPC，再由該呼叫原本的 HTTP response 回覆 agent，agent 不直接接收 extension WebSocket 訊息。
+
+取消後才抵達的回覆也會被忽略。單一 HTTP 請求中斷只取消其等待；extension WebSocket 中斷則會影響所有等待該連線回覆的 browser RPC。配對機制不提供同一分頁的操作鎖定或跨 agent 順序保證，衝突操作需由 agent／host 協調。共享額度與完整流程見[架構文件](architecture.md#多-agent-請求配對與共享狀態)。
+
+操作失敗時可回覆下列 strict error shape。`name` 與 `code` 不可為空且最多 128 字元；`message` 最多 1024 字元。Server 會將 extension error 映射為 `EXTENSION_OPERATION_FAILED`，不會轉送敏感 payload。開啟、關閉或移動分頁若逾時或斷線，結果可能不明；server 不會自動重送。
 
 ```json
 {

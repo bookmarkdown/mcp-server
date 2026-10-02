@@ -150,7 +150,7 @@ tag 版本與最新 `main` commit 相符，並檢查 npm registry 是否已有�
 2. 確認 npm registry 的 `latest` 是新版本。
 3. 從 registry 安裝新版本到乾淨環境。
 4. 使用 MCP client 完成 initialize smoke test。
-5. 確認 stdout 只有 MCP protocol 訊息。
+5. 確認 daemon stdout 沒有 MCP protocol 訊息，HTTP initialize 與 tools/list 回覆正確，且 stderr 不洩漏 token。
 
 在下一次 tag 前，npm Trusted Publisher 必須使用以下精確設定：
 

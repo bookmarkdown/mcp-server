@@ -2,10 +2,10 @@
 
 [English](README.md) | [繁體中文](README.zh-TW.md)
 
-BookMarkdown MCP Server 讓 MCP host 與 companion browser extension 溝通。Daemon 預設透過 loopback WebSocket 接受 extension 連線；MCP host 則透過本機 IPC 與獨立的 stdio proxy 通訊，Windows 使用 Named Pipe，Linux 與 macOS 使用 Unix domain socket。
+BookMarkdown MCP Server 讓 agent 直接透過 MCP Streamable HTTP 呼叫本機 daemon。Daemon 保留 browser extension WebSocket bridge；stdio proxy 與本機 IPC 已移除。
 
 > [!IMPORTANT]
-> 已發布至 npm 的 `0.2.0` 支援 Windows 與 Linux，並已在 Ubuntu 與 Windows 通過乾淨安裝及 MCP initialize smoke test。真實 Chrome、companion extension、Chrome Local Network Access 與指定 MCP host 的相容性仍未驗證。選用的區網連線需要 WSS，且 companion extension 必須設定為連線至伺服器 URL。
+> 此 HTTP 模式尚未發布，請從原始碼建置。真實 Chrome、extension 與指定 MCP host 的相容性仍未驗證。
 
 ## 功能
 
@@ -63,15 +63,17 @@ npm run build
 未提供子命令時，CLI 會啟動正式模式 daemon。正式模式需要高熵配對 token 與精確的 Chrome extension ID。Companion extension 必須透過其支援的設定流程使用相同 token。
 
 ```powershell
+$env:BOOKMARKDOWN_MCP_TOKEN = (node -p "require('node:crypto').randomBytes(32).toString('hex')")
 $env:BOOKMARKDOWN_BRIDGE_TOKEN = (node -p "require('node:crypto').randomBytes(32).toString('hex')")
 $env:BOOKMARKDOWN_EXTENSION_IDS = "<32-character-extension-id>"
-npx -y @bookmarkdown/mcp-server@latest
+npm start
 ```
 
 ```bash
+export BOOKMARKDOWN_MCP_TOKEN="$(node -p "require('node:crypto').randomBytes(32).toString('hex')")"
 export BOOKMARKDOWN_BRIDGE_TOKEN="$(node -p "require('node:crypto').randomBytes(32).toString('hex')")"
 export BOOKMARKDOWN_EXTENSION_IDS="<32-character-extension-id>"
-npx -y @bookmarkdown/mcp-server@latest
+npm start
 ```
 
 全域安裝可改用 `bookmarkdown-mcp-server`；已建置的 source checkout 可改用 `npm start`。
@@ -82,28 +84,33 @@ npx -y @bookmarkdown/mcp-server@latest
 
 ## 設定 MCP host
 
-設定 MCP host 透過 `npx` 啟動已發布的 proxy，不需 source checkout 或全域安裝。Daemon 與 proxy 請固定使用相同套件版本；IPC 握手會拒絕版本不一致的連線。`-y` 可避免安裝確認提示阻擋 MCP 啟動。
+先啟動 daemon，再將 MCP host 設為 Streamable HTTP。Host 必須支援自訂 Authorization header；JSON 欄位依 host 而異，以下為常見設定形狀：
 
 ```json
 {
   "mcpServers": {
     "bookmarkdown": {
-        "command": "npx",
-        "args": ["-y", "@bookmarkdown/mcp-server@latest", "proxy"]
+      "type": "http",
+      "url": "http://127.0.0.1:38472/mcp",
+      "headers": { "Authorization": "Bearer <BOOKMARKDOWN_MCP_TOKEN>" }
     }
   }
 }
 ```
 
-MCP host 的 PATH 必須能找到 `npx`。Windows 上若 host 需要 command shim，可改用 `npx.cmd`。
+MCP host 不會啟動 daemon。舊的 proxy `command`／`args` 設定需改為 HTTP URL；`proxy` 子命令與 `BOOKMARKDOWN_IPC_PIPE_NAME` 已移除。Daemon 離線時 initialize、tools/list 與 tools/call 都無法連線。HTTP 使用無狀態 JSON 回覆，不建立 MCP session；GET SSE、DELETE 與其他非 POST 方法回 `405`，不支援通知串流或續傳。操作結果不明時不得自動重送。
 
-請在本 repository 以外執行已發布版本的 `npx` 指令，並避免將 MCP host 的工作目錄設為此 checkout。在相同版本的 checkout 內，npm 可能解析成本機套件而非已發布的 CLI；本機 executable 不存在時會回報 `bookmarkdown-mcp-server: not found`。
+`BOOKMARKDOWN_MCP_TOKEN` 必填，為 32–512 個不含空白的可列印 ASCII 字元；`BOOKMARKDOWN_MCP_PORT` 預設 `38472`，範圍 1–65535。HTTP 固定綁定 `127.0.0.1`。每次請求都驗證 Bearer token、Host 與 Origin（若有）；Host 僅接受實際 port 的 `127.0.0.1` 或 `localhost`，Origin 僅接受相同的本機 HTTP origin。不提供 CORS 或 HTTP 區網綁定。MCP token 與 extension pairing token 應分別產生。
 
-從原始碼開發時，先執行 `npm ci` 與 `npm run build`，再用 `"command": "node"` 搭配 `"args": ["/path/to/mcp-server/dist/cli.js", "proxy"]`。請換成 checkout 的絕對路徑，Windows 使用 Windows 路徑。這會執行本機程式碼，而非 npm 發布版本。
+## 多個 agent
 
-MCP host 只會啟動 proxy，不會啟動 daemon。Proxy 使用預設本機 IPC endpoint `bookmarkdown-mcp`，Windows 為 Named Pipe，Linux 與 macOS 為 Unix domain socket，不需要 WebSocket 配對 token。使用瀏覽器工具前，請先啟動 daemon。macOS 的 socket 放在 `/tmp/bookmarkdown-<uid>/`，避免過長的 `TMPDIR`；目錄與 socket 分別限制為目前使用者的 `0700` 與 `0600` 權限。
+Daemon 未設定 agent 數量配額；所有 agent 共用預設 **32 個處理中的 HTTP 請求**額度，包含 initialize、tools/list 與 tools/call。`BOOKMARKDOWN_MAX_PENDING_REQUESTS` 可設為 **1–256** 的整數，修改後需重啟 daemon。超限的 HTTP 請求回 `503`，附帶 `Retry-After: 1`。閒置 agent 不占用處理中的請求額度；實際容量也取決於系統資源與工作負載。
 
-Proxy 會透過 stderr 顯示啟動提醒，stdout 只包含 MCP 協定訊息。是否能看到 stderr 取決於 MCP host；extension 連線 log 顯示於 daemon 終端。
+Bridge 另以相同設定限制等待中的 browser RPC，超限時工具回 `BRIDGE_BUSY`。單次工具呼叫，例如查詢分頁數的 devices.list，可能送出多個 browser RPC。`BOOKMARKDOWN_MAX_CONNECTIONS` 預設 **8**，限制的是 extension WebSocket 連線數。
+
+每個 HTTP 請求有獨立 MCP server 與 transport，因此不同 agent 可使用相同 MCP JSON-RPC ID。每個 browser RPC 則由 daemon 另產生 UUID `requestId`；extension 回覆須符合該 UUID 與原始 WebSocket 連線，daemon 才會透過原始 HTTP 請求回覆對應 agent。回覆可以不依送出順序抵達，詳見[請求配對與共享狀態](docs/architecture.md#多-agent-請求配對與共享狀態)。
+
+所有 agent 共用 MCP token、browser instances 與工具權限。回覆分流沒有提供每個 agent 的權限隔離、分頁獨占或跨 agent 操作順序保證；同時修改同一分頁可能影響彼此，應由 agent 或 host 協調衝突操作。
 
 ## 安全與隱私
 

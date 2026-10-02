@@ -1,65 +1,62 @@
 ---
-title: "MCP Daemon 與 Proxy 架構"
-description: "BookMarkdown 本機 daemon、browser tools、MCP stdio proxy、IPC 健康檢查與 runtime mode 邊界。"
-ms.date: 2026-09-29
+title: "MCP Streamable HTTP Daemon 架構"
+description: "Agent 直接呼叫 HTTP daemon 與 browser WebSocket bridge 的資料流、安全邊界及生命週期。"
+ms.date: 2026-10-02
 ms.topic: concept
 ---
 
-## 狀態
-
-本 repository 已實作 daemon 與 MCP stdio proxy 的程序拆分。使用者手動以前景程序啟動 daemon；MCP host 啟動 proxy，並透過本機 IPC 將工具呼叫交給 daemon。此 repository 的 Node.js 測試不代表真實 Chrome、extension 或指定 MCP host 的整合已驗證。
-
-## 架構圖
+## 資料流
 
 ```mermaid
 flowchart LR
-    U["使用者"] -->|"啟動本機 daemon"| D["BookMarkdown 本機 server<br/>WebSocket、連線狀態與工具處理"]
-    C["Chrome extension"] -->|"WebSocket<br/>default loopback or private-IP WSS"| D
-    A["本機 Agent / MCP host"] -->|"MCP stdio"| P["MCP proxy<br/>工具呼叫轉送"]
-    P <-->|"本機 IPC<br/>Windows Named Pipe / Linux/macOS Unix socket"| D
+    A["Agent / MCP host"] <-->|"MCP Streamable HTTP<br/>Bearer token, loopback /mcp"| D["BookMarkdown daemon<br/>MCP tools、instance registry"]
+    C["Browser extension"] <-->|"WebSocket / WSS<br/>pairing token"| D
 ```
 
-Daemon 僅在使用者需要時執行。MCP host 啟動 proxy；proxy 即使 daemon 離線仍可提供 MCP initialize 與工具清單，並在工具呼叫時檢查 daemon 和 extension 狀態。Proxy 不持有 extension 連線或業務狀態。
+使用者啟動單一 daemon；agent 直接呼叫 HTTP endpoint。stdio proxy 與本機 IPC 已移除。Daemon 擁有 WebSocket listener、extension 連線、工具執行與記憶體內 instance registry；重啟後 registry 清空，由 extension 重連並重新註冊。
 
-## 本機 CLI 子命令
+## HTTP transport
 
-同一個 npm package 使用單一 CLI binary，透過 `daemon` 與 `proxy` 子命令啟動本機 server 和 MCP proxy；省略子命令時預設為 `daemon`。從 source checkout 執行 `npm start`、`npm start -- daemon`、`node dist/cli.js` 與 `node dist/cli.js daemon` 會啟動正式模式 daemon；正式模式要求 `BOOKMARKDOWN_EXTENSION_IDS`。從 checkout 執行 `npm start -- proxy` 或 `node dist/cli.js proxy` 會啟動 MCP proxy。`npm run dev -- daemon` 透過明確的 development entrypoint 啟動開發模式，不需要固定 extension ID 清單，也不依 `NODE_ENV` 判斷模式。兩種模式都要求 `BOOKMARKDOWN_BRIDGE_TOKEN`，並可設定 `BOOKMARKDOWN_WS_PORT`。WebSocket 預設綁定 `127.0.0.1`；區網模式使用 `BOOKMARKDOWN_WS_HOST` 搭配 TLS certificate/key。proxy 可連線至任一 daemon mode。
+預設 endpoint 為 `http://127.0.0.1:38472/mcp`，port 由 `BOOKMARKDOWN_MCP_PORT` 設定。HTTP 固定綁定 loopback，與可選用區網 WSS 的 extension listener 分開。每個請求必須提供 `Authorization: Bearer <BOOKMARKDOWN_MCP_TOKEN>`；MCP token 與 extension pairing token 各自設定。
 
-目前 source checkout 支援 Windows、Linux 與 macOS；macOS 支援需使用包含此變更的新版套件，既有 `0.2.1` 套件僅支援 Windows 與 Linux。
+使用 SDK `NodeStreamableHTTPServerTransport`，每個 POST 建立獨立 MCP server 與 transport，工具執行共用 daemon bridge，避免不同 client 的 request ID 或協定狀態混用。無狀態模式不建立 `Mcp-Session-Id`，使用 JSON 回覆；notifications/initialized 回 `202`。非 POST 方法回 `405`，不支援 GET SSE 通知串流或 resumability。MCP negotiation、Accept/Content-Type、JSON-RPC parsing 與 protocol header validation 由 SDK 處理。
 
-## 程序責任
+HTTP body 上限沿用 `BOOKMARKDOWN_MAX_PAYLOAD_BYTES`，超限回 `413`。同時處理中的 HTTP 請求數沿用 `BOOKMARKDOWN_MAX_PENDING_REQUESTS`，超限或正在關閉時回 `503`。Bridge 另行限制 WebSocket 連線、instances 與 in-flight browser RPC；工具逾時沿用 `BOOKMARKDOWN_REQUEST_TIMEOUT_MS`。
 
-* Daemon 維護 WebSocket listener、已認證的 extension connections、request routing、MCP tools 的實際處理，以及 process-local 的連線狀態。狀態不落盤；daemon 重啟後由 extension 重連並重新註冊。
-* Proxy 提供 MCP stdio endpoint，使用 package 共用的靜態 tool schema 回應 initialize 與 tools/list；tools/call 透過 IPC 交給 daemon 執行。Proxy 不執行 browser 業務邏輯，也不會啟動 daemon。
-* 每個 proxy session 維持一條 IPC 長連線，同一 daemon 可同時接受多個 proxy。IPC 協定須定義 framing、schema、session/request ID 關聯、取消、逾時、斷線處理和 payload 上限。
-* Windows 使用 Named Pipe，Linux 與 macOS 使用每使用者私有目錄中的 Unix domain socket；同一 daemon 可服務多個 proxy session。
+## 多 agent 請求配對與共享狀態
 
-目前 browser RPC 僅允許計數、分頁 metadata 清單、開啟、關閉與跨視窗移動分頁。Extension 必須依 capabilities 回應，並在計數與清單中排除 incognito 視窗和分頁。標題與 URL 是敏感 metadata；不提供頁面內容。開啟、關閉與移動的結果不明時不得自動重送。
+Daemon 未實作 agent 數量配額或持久的 agent session。所有 agent 共用 HTTP 處理額度，`BOOKMARKDOWN_MAX_PENDING_REQUESTS` 預設為 `32`，可設定 `1–256`；修改後需重啟 daemon。額度包含正在處理的 initialize、tools/list、tools/call 與其他已接受的 POST。閒置 agent 不占用此額度，超限回 HTTP `503` 與 `Retry-After: 1`。實際可服務的 agent 數仍取決於系統資源與呼叫頻率。
 
-## 啟動生命週期
+Bridge 另行以相同設定限制 pending browser RPC；這是另一個計數器，超限回工具錯誤 `BRIDGE_BUSY`。單次 devices.list 在查詢多個 instance 分頁數時，可能產生多個 browser RPC。`BOOKMARKDOWN_MAX_CONNECTIONS` 預設 `8`、範圍 `1–64`，用於 extension WebSocket 連線上限，並非 agent 數量上限。
 
-1. 使用者設定 daemon 環境變數並手動執行 `daemon` 子命令。正式模式驗證配對 token 與精確 extension ID allowlist；開發模式驗證配對 token，不要求固定 ID 清單。Daemon 預設綁定 `127.0.0.1`；選用的區網綁定只接受指定 RFC1918 IPv4，且必須使用 TLS。若設定錯誤或 listener 啟動失敗，整體啟動失敗並以非零狀態退出，不留下半啟動 endpoint，也不掃描其他 port。
-2. 符合目前協定的 extension client 可連線至 daemon WebSocket listener。Companion extension 已實作網路錯誤後的退避重連與重新註冊；此行為由 extension 負責，不在此 repository 實作。重連退避尚無專項自動化測試，真實 Chrome 中的重連也尚未驗證。
-3. MCP host 啟動 `proxy` 子命令。Proxy 使用共用 schema 回應 MCP initialize 與 tools/list，並透過 IPC health check 分開取得 daemon readiness 和 extension connection 狀態。
-4. 若 daemon 離線，MCP stdio 和工具清單仍可用；tools/call 回 `DAEMON_UNAVAILABLE`。Proxy 不啟動 daemon，後續工具呼叫會重新探測並嘗試連線，因此使用者啟動 daemon 後不必重啟 proxy。
-5. Daemon ready 但 extension 未連線時，tools/call 立即回 `EXTENSION_NOT_CONNECTED`，不等待 extension。若 extension 已連線但未回覆，沿用設定的 request timeout。
-6. 若 daemon 在工具呼叫途中中斷，該呼叫回 `DAEMON_DISCONNECTED`，不自動重送；後續呼叫重新連線。
-7. 使用者按 `Ctrl+C` 停止 daemon 時，daemon 停止接收新 IPC 請求，有限時間清理在途呼叫，逾時則以 `DAEMON_DISCONNECTED` 結束並關閉 WebSocket 和 IPC。
-8. 再次執行 daemon 時，CLI 先探測既有 instance。IPC health 包含 runtime mode；只有健康、版本相同且 runtime mode 相同的既有 daemon 才會被視為重複啟動。其他模式不會被當成相符的 duplicate，若共用 listener 已占用，新的啟動會失敗。環境變數變更需由使用者停止並重新啟動 daemon 才會生效。
-9. Proxy 與 daemon 以 IPC handshake 比對 package version。版本不符時回 `DAEMON_VERSION_MISMATCH`，提示使用者手動重啟 daemon；proxy 不代為重啟。
+兩層 ID 分別由 MCP client 與 daemon 管理：
+
+| 層級 | ID 與配對方式 |
+| --- | --- |
+| Agent → HTTP MCP | Agent 提供 JSON-RPC `id`；每個 HTTP 請求有獨立 MCP server／transport，回覆使用原始 `id` 與 HTTP response。不同 agent 可同時使用 `id: 1`。 |
+| Daemon → extension WebSocket | `RequestRouter` 為每個 browser RPC 產生 UUID `requestId`，保存該呼叫的 resolve/reject、operation 與 `connectionId`；extension 沿用 UUID 回覆。 |
+
+例如 A 與 B 都送出 MCP `id: 1`，daemon 的 browser RPC 分別使用 UUID A 與 UUID B。即使 B 的 WebSocket 回覆先到，router 也只完成 UUID B 對應的呼叫，結果由 B 原本的 HTTP response 回傳；agent 不直接接收或篩選 extension WebSocket 訊息。
+
+`RequestRouter.handleResponse()` 同時驗證 `requestId` 與來源 `connectionId`。來自其他 extension socket、未知 ID，或取消／逾時後才抵達的回覆會被忽略。HTTP 斷線只取消該 HTTP 請求的 bridge 等待，不會取消其他 agent 的 HTTP 請求；extension socket 中斷則會使所有等待該 socket 回覆的 browser RPC 失敗。實作見 [daemon service](../src/daemon/service.ts) 與 [request router](../src/bridge/request-router.ts)。
+
+所有 agent 共用 MCP token、instance registry 與工具權限，未提供每個 agent 的身分／權限隔離、分頁獨占、交易或跨 agent 操作順序保證。回覆正確配對不代表瀏覽器狀態互相隔離；兩個 agent 同時修改同一分頁仍可能互相影響，衝突操作應由 agent／host 協調，結果不明時不自動重送。
+
+## 生命週期
+
+1. 驗證 WebSocket 與 HTTP 設定、token、正式模式 extension ID allowlist。
+2. 啟動 WebSocket bridge 與 HTTP listener；任一失敗會清理已建立的資源。不掃描替代 port，重複啟動回報 port 被占用，不再使用 IPC duplicate probe。
+3. Agent 直接 initialize 與 tools/list。Daemon 離線時 HTTP 無法連線；extension 尚未連線時工具回 `EXTENSION_NOT_CONNECTED`。
+4. HTTP response socket 中斷時取消該請求的 bridge 等待，其他請求不受影響。工具錯誤維持安全的 MCP `isError` 回覆。
+5. `SIGINT`、`SIGTERM` 或 `close()` 停止接受新連線，等待在途請求完成，預設最多 1000 ms。超時後取消等待、關閉 HTTP sockets 與 WebSocket bridge。`close()` 可重複呼叫。
+6. 開啟、關閉與移動分頁的結果不明時不自動重送；重新連線與重試決策由 agent／host 負責。
 
 ## 安全邊界
 
-* WebSocket 預設綁定 `127.0.0.1`。選用的區網模式只接受單一 RFC1918 IPv4、要求 TLS，並拒絕 wildcard host。兩種模式都只接受格式為 `chrome-extension://[a-p]{32}` 的 Origin，要求 pairing token，並驗證 hello extension ID 與 Origin ID 完全相同。
-* 正式模式另外要求 extension ID 精確符合 `BOOKMARKDOWN_EXTENSION_IDS`；開發模式不使用固定 allowlist。Origin 不是認證。
-* WebSocket pairing token 只由 daemon 透過環境變數讀取，不得放入命令列、log、proxy 環境或 MCP 回覆。
-* Proxy 透過本機 IPC 呼叫 daemon；WebSocket pairing token 不經過 proxy。
-* Browser RPC 使用明確 operation allowlist、每項操作的 strict payload/result schemas 與 instance capability 檢查。不得記錄 tab URL、標題或 operation payload。
-* Daemon 必須限制連線數、訊息大小、pending requests 和等待時間；斷線或取消時清除對應狀態。
-* Proxy 不可在 daemon 不可用時自行啟動 daemon、連線到其他 endpoint，或自動重送結果不明的請求。
+HTTP 使用 constant-time Bearer token 比較。Host 僅接受實際 port 的 `127.0.0.1` 或 `localhost`；Origin 若存在，必須為相同本機 HTTP origin，否則回 `403`。不啟用 CORS，不提供 HTTP 區網綁定。缺少或不正確的 Authorization 回 `401`。Token 不得放在 URL、log 或 source control。
 
-## 實作與驗證
+Extension WebSocket 保留 pairing token、production extension ID allowlist、Origin 與 hello ID 一致性驗證，以及可選用 RFC1918 WSS。Browser RPC 保留 operation allowlist、strict schemas 與 instance capability 檢查。分頁 metadata 可能敏感，不記錄操作 payload，不讀取頁面內容；排除 incognito 屬 extension 責任。
 
-daemon/proxy 拆分、Windows Named Pipe 與 Linux/macOS Unix domain socket IPC、health/version handshake、共用工具目錄與 CLI 子命令已實作於此 repository。macOS 使用 `/tmp/bookmarkdown-<uid>/` 中的 socket，避開較長的 `TMPDIR` 與 104-byte 路徑上限；Linux 維持既有暫存目錄。兩者都驗證目錄擁有者、設定目錄 `0700` 與 socket `0600`，並只清理同使用者擁有的失效 socket。
-一般 Node.js 測試涵蓋本機 IPC、WebSocket 認證、Linux 私有介面上的 WSS 與 proxy 行為；這些測試不代表真實 Chrome/extension、Chrome Local Network Access、extension 權限或指定 MCP host 的互通性已驗證。
-Companion extension 的重連實作在本 repository 範圍之外，且尚無重連退避專項測試。
+## 驗證範圍
+
+Node.js 測試涵蓋 HTTP initialize、工具目錄、認證、Host/Origin、body 限制、取消、併發隔離、啟動 rollback、關閉與 WebSocket browser RPC。Linux WSS 與 Unix symlink CLI 測試在 Windows 略過。真實 Chrome、extension、Chrome Local Network Access 與指定 MCP host 相容性仍未驗證。設定見 [README](../README.zh-TW.md)，extension contract 見[瀏覽器整合指南](browser-integration.md)。

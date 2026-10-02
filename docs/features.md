@@ -1,27 +1,23 @@
 ---
 title: "Available Features"
-description: "BookMarkdown MCP daemon、stdio proxy、browser window/tab 工具與目前整合狀態。"
-ms.date: 2026-09-29
+description: "BookMarkdown MCP daemon、Streamable HTTP、browser window/tab 工具與目前整合狀態。"
+ms.date: 2026-10-02
 ms.topic: reference
 ---
 
 ## 本機架構
 
-使用者手動在前景啟動 daemon。daemon 擁有 WebSocket listener、extension 連線、工具執行與記憶體內 instance 狀態。MCP host 啟動 stdio proxy；proxy 透過本機 IPC 將工具呼叫送往 daemon，不會代為啟動 daemon。Windows 使用 Named Pipe；Linux 與 macOS 使用位於每使用者私有目錄的 Unix domain socket。
+使用者手動以前景程序啟動 daemon，agent 直接透過 `http://127.0.0.1:38472/mcp` 呼叫 MCP Streamable HTTP。stdio proxy 與本機 IPC 已移除；CLI 僅接受 `daemon`，省略時也啟動 daemon。
 
-CLI 接受 `daemon` 或 `proxy`；省略子命令時預設啟動 `daemon`：
+`npm start` 使用正式模式，`npm run dev -- daemon` 使用開發模式，不依 `NODE_ENV` 判斷模式。兩者皆需 `BOOKMARKDOWN_MCP_TOKEN` 與 `BOOKMARKDOWN_BRIDGE_TOKEN`；正式模式另需精確的 `BOOKMARKDOWN_EXTENSION_IDS`。HTTP port 使用 `BOOKMARKDOWN_MCP_PORT`，預設 `38472`。無狀態 JSON 回覆不建立 MCP session，非 POST 方法回 `405`。Daemon 離線時 initialize、tools/list 與 tools/call 都無法連線。啟動失敗會清理 listener；port 被占用時不掃描其他 port。設定與 migration 見 [README](../README.zh-TW.md)。
 
-```bash
-npm start
-```
+## 多 agent 容量與操作邊界
 
-`npm start`、`npm start -- daemon`、`node dist/cli.js` 與 `node dist/cli.js daemon` 都會以正式模式啟動 daemon，並要求設定精確的 `BOOKMARKDOWN_EXTENSION_IDS`。`npm start -- proxy` 或 `node dist/cli.js proxy` 會啟動 MCP proxy。`npm run dev -- daemon` 明確啟動開發模式，不需要固定 ID allowlist，也不依 `NODE_ENV` 判斷模式。兩種 daemon 模式都需要配對 token。daemon 設定錯誤或 listener 啟動失敗時會清理已開啟的資源並以非零狀態結束；不會掃描替代 port。
+Daemon 沒有固定 agent 數量配額；所有 agent 共用預設 `32` 個處理中的 HTTP 請求額度。`BOOKMARKDOWN_MAX_PENDING_REQUESTS` 可設為 `1–256`，修改後需重啟；超限回 HTTP `503` 與 `Retry-After: 1`。閒置 agent 不占用額度。Bridge 另以相同設定限制 pending browser RPC，超限回工具錯誤 `BRIDGE_BUSY`；單次 devices.list 查詢分頁數可能占用多個 browser RPC 額度。`BOOKMARKDOWN_MAX_CONNECTIONS` 預設 `8`、範圍 `1–64`，限制 extension WebSocket 連線數。
 
-目前已發布的 `@bookmarkdown/mcp-server@0.2.0` 支援 Windows 與 Linux；套件已在 Ubuntu 與 Windows 通過乾淨安裝及 MCP initialize smoke test，從 npm registry 安裝的套件也已在 Ubuntu 完成相同驗證。
+不同 agent 的 MCP JSON-RPC ID 可重複；每個 HTTP 請求的 server／transport 獨立，browser RPC 則以 daemon 產生的 UUID `requestId` 與 extension 來源連線配對，結果回到原始 HTTP 請求。回覆順序可以不同於送出順序，詳見[架構文件](architecture.md#多-agent-請求配對與共享狀態)。
 
-WebSocket 預設綁定 `127.0.0.1`；選用的區網模式可指定單一 RFC1918 IPv4，並以 `BOOKMARKDOWN_WS_TLS_CERT_FILE` 和 `BOOKMARKDOWN_WS_TLS_KEY_FILE` 提供 TLS 憑證與私密金鑰。
-
-proxy 使用 MCP SDK v2 `serveStdio`。MCP 訊息只寫入 stdout，診斷訊息寫入 stderr。daemon 離線時，proxy 仍可 initialize 與列出靜態工具目錄；每次工具呼叫會檢查 daemon 狀態。呼叫已送出後若結果不確定，不會自動重送。
+Agent 共用認證 token、browser instances 與工具權限。沒有每個 agent 的權限隔離或分頁獨占；同時修改同一分頁可能互相影響，應由 agent／host 協調。
 
 ## MCP 工具
 
@@ -37,7 +33,7 @@ proxy 使用 MCP SDK v2 `serveStdio`。MCP 訊息只寫入 stdout，診斷訊息
 
 計數工具回傳 `count` 與 `countedAt`。分頁標題和 URL 可能含有敏感資訊；`browser.listTabs` 只回傳有界 metadata，不讀取頁面內容。Extension 必須確保 `browser.countOpenTabs`、`browser.countOpenWindows` 與 `browser.listTabs` 排除 incognito 視窗和分頁。Server 無法從 extension 回覆判斷其是否遵守此規則。
 
-`browser.openTab`、`browser.closeTab` 與 `browser.moveTab` 會改變瀏覽器狀態。逾時或連線中斷時，結果可能不明，proxy 不會自動重送。所有 browser tools 都要求目標 instance 在 hello capabilities 中宣告相應 operation。
+`browser.openTab`、`browser.closeTab` 與 `browser.moveTab` 會改變瀏覽器狀態。逾時或連線中斷時，結果可能不明，server 不會自動重送。所有 browser tools 都要求目標 instance 在 hello capabilities 中宣告相應 operation。
 
 ### `devices.list` 結果
 
@@ -49,26 +45,17 @@ instance registry 只存在 daemon 記憶體中，daemon 重啟後會清空。`i
 
 ## 連線與錯誤
 
-daemon 預設在 `127.0.0.1:38471` 接受 WebSocket 連線，可用 `BOOKMARKDOWN_WS_PORT` 指定 port。設定 `BOOKMARKDOWN_WS_HOST` 後，只接受明確的 RFC1918 IPv4；非 loopback 綁定必須提供 TLS 憑證與私密金鑰並使用 WSS，wildcard host 會被拒絕。HTTP Host 必須完全符合綁定位址與實際 port。Origin 在兩種模式都必須符合 `chrome-extension://[a-p]{32}`；正式模式另外要求 ID 精確列於 `BOOKMARKDOWN_EXTENSION_IDS`，開發模式則接受任何符合格式的 ID。兩種模式都要求 hello token 正確，且 hello extension ID 必須等於 Origin ID。Origin 本身不是認證；token 不會經 IPC 傳送。Companion extension 必須能設定相符的 WSS URL 並信任憑證，真實瀏覽器端尚未驗證。listener 與 IPC 必須同時成功啟動，否則 daemon 會回復已建立的 listener。
+daemon 預設在 `127.0.0.1:38471` 接受 WebSocket 連線，可用 `BOOKMARKDOWN_WS_PORT` 指定 port。設定 `BOOKMARKDOWN_WS_HOST` 後，只接受明確的 RFC1918 IPv4；非 loopback 綁定必須提供 TLS 憑證與私密金鑰並使用 WSS，wildcard host 會被拒絕。HTTP Host 必須完全符合綁定位址與實際 port。Origin 在兩種模式都必須符合 `chrome-extension://[a-p]{32}`；正式模式另外要求 ID 精確列於 `BOOKMARKDOWN_EXTENSION_IDS`，開發模式則接受任何符合格式的 ID。兩種模式都要求 hello token 正確，且 hello extension ID 必須等於 Origin ID。Origin 本身不是認證；HTTP agent token 與 extension pairing token 分開設定。Companion extension 必須能設定相符的 WSS URL 並信任憑證，真實瀏覽器端尚未驗證。WebSocket 與 HTTP listener 必須同時成功啟動，否則 daemon 會回復已建立的 listener。
 
 瀏覽器端連線、hello/ack、RPC 訊息與 client 範例見[瀏覽器整合指南](browser-integration.md)。Companion extension 已實作 WebSocket client 與 browser RPC，相關單元測試已通過；真實 Chrome 整合、Local Network Access、extension 權限與指定 MCP host 的互通性仍未驗證。重連退避已有實作，但尚無專項自動化測試。
 
-IPC health 回覆包含 runtime mode，IPC protocol version 為 `3`。只有健康且模式相同的既有 daemon 才會被視為重複啟動；proxy 可連線至任一模式，不會以 runtime mode 篩選 daemon。
-
-proxy 與 daemon 使用有版本的本機 IPC。Windows 使用 Named Pipe，Linux 與 macOS 使用 Unix domain socket；每個 proxy session 維持自己的連線，daemon 可同時服務多個 proxy。主要工具錯誤如下：
-
-| 錯誤碼 | 意義 |
-| --- | --- |
-| `DAEMON_UNAVAILABLE` | daemon 尚未啟動或目前無法連線。 |
-| `DAEMON_DISCONNECTED` | daemon 在工具呼叫送出後中斷，結果不確定且不會重送。 |
-| `DAEMON_VERSION_MISMATCH` | daemon 與 proxy 版本不相容，需手動重啟相同版本的 daemon。 |
-| `EXTENSION_NOT_CONNECTED` | 沒有可供該呼叫使用的已驗證 extension instance。 |
+HTTP 缺少或不正確的 Bearer token 回 `401`，非法 Host/Origin 回 `403`，body 超限回 `413`，同時處理中的 HTTP 請求超限回 `503`。工具錯誤包含 `EXTENSION_NOT_CONNECTED`、`UNSUPPORTED_OPERATION`、`REQUEST_TIMEOUT`、`REQUEST_CANCELLED`、`EXTENSION_DISCONNECTED`、`EXTENSION_OPERATION_FAILED`、`BRIDGE_BUSY` 與 `INVALID_EXTENSION_RESPONSE`。取消或斷線不會自動重送瀏覽器操作。
 
 WebSocket hello 使用 protocol version `2`。一般註冊要求 app ID `bmd-extension`、browser `chrome`、UUID instance ID、合法裝置別名及與 Origin 相符的 extension ID；正式模式也必須符合 daemon allowlist。Probe 可省略別名且不會註冊 instance。Browser RPC 僅接受 `browser.countOpenTabs`、`browser.countOpenWindows`、`browser.listTabs`、`browser.openTab`、`browser.closeTab` 與 `browser.moveTab`，並在呼叫前檢查 instance capabilities。request ID 用於將回覆配對到原始連線及呼叫。
 
 ## 驗證狀態與後續工作
 
-此 repository 的測試使用一般 Node.js 本機 IPC client、MCP stdio process 與 WebSocket client，涵蓋認證、路由、proxy-first 恢復、多 proxy 隔離、啟動 rollback，以及 Linux 私有介面上的 WSS handshake。Companion extension 的相關單元測試狀態見其所屬 repository；重連退避未有專項測試。真實 Chrome/extension 整合、Chrome Local Network Access、extension 權限及指定 MCP host 的互通性尚未驗證。
+此 repository 的 Node.js 測試使用 HTTP MCP 與 WebSocket client，涵蓋認證、路由、取消、併發隔離、啟動 rollback、關閉及 browser operation contract。Linux WSS 測試在 Windows 略過。真實 Chrome/extension、Chrome Local Network Access、extension 權限及指定 MCP host 的互通性尚未驗證。
 
 Companion extension 已實作 daemon 離線後以有上限的指數退避重新連線並重新註冊 instance；重連退避尚無專項自動化測試，且尚未在真實瀏覽器中驗證。
 
