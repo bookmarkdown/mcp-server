@@ -40,7 +40,7 @@ Server 提供以下 MCP tools：
 npx -y @bookmarkdown/mcp-server@latest
 ```
 
-啟動 daemon 前，請先設定下方列出的必要環境變數。也可以選擇全域安裝：
+新版 CLI 首次啟動會自動建立設定檔與 token，不需設定 ENV。也可以選擇全域安裝：
 
 ```bash
 npm install --global @bookmarkdown/mcp-server
@@ -56,31 +56,25 @@ npm ci
 npm run build
 ```
 
-啟動 daemon 前，請先設定下方列出的必要環境變數。
+建置後直接執行 `npm start`。
 
 ## 啟動 daemon
 
-未提供子命令時，CLI 會啟動正式模式 daemon。正式模式需要高熵配對 token 與精確的 Chrome extension ID。Companion extension 必須透過其支援的設定流程使用相同 token。
-
-```powershell
-$env:BOOKMARKDOWN_MCP_TOKEN = (node -p "require('node:crypto').randomBytes(32).toString('hex')")
-$env:BOOKMARKDOWN_BRIDGE_TOKEN = (node -p "require('node:crypto').randomBytes(32).toString('hex')")
-$env:BOOKMARKDOWN_EXTENSION_IDS = "<32-character-extension-id>"
-npm start
-```
-
 ```bash
-export BOOKMARKDOWN_MCP_TOKEN="$(node -p "require('node:crypto').randomBytes(32).toString('hex')")"
-export BOOKMARKDOWN_BRIDGE_TOKEN="$(node -p "require('node:crypto').randomBytes(32).toString('hex')")"
-export BOOKMARKDOWN_EXTENSION_IDS="<32-character-extension-id>"
 npm start
 ```
 
-全域安裝可改用 `bookmarkdown-mcp-server`；已建置的 source checkout 可改用 `npm start`。
+全域安裝使用 `bookmarkdown-mcp-server`。不需預先設定 ENV 或 extension ID；首次啟動會建立使用者設定檔，以及各自獨立的 MCP 與配對 token，之後沿用。
 
-請讓 daemon 持續在此終端執行；按 `Ctrl+C` 停止。不要將配對 token 放入命令列參數、URL、記錄檔或原始碼管理。
+開啟終端機提示的本機管理頁（預設 `http://127.0.0.1:38472/`）。頁面以兩行大字顯示 **bookmarkdown**／**mcp-server**，提供 URL、遮蔽的 token 顯示／複製、支援套件與已配對裝置清單，以及伺服器設定。設定保存與 token 重建需重啟後生效。
 
-啟動時，daemon 會透過 stderr 印出實際 WebSocket URL、允許的 extension IDs，以及 BMD → 設定 → MCP 的串接步驟。配對 token 只顯示已設定，不會印出內容；請在 extension 填入相同的 `BOOKMARKDOWN_BRIDGE_TOKEN` 值。Log 會區分連線測試成功與正式連線，並顯示連線、離線及握手拒絕原因，不包含分頁 metadata 或操作 payload。使用 WSS 時，瀏覽器必須信任 server 憑證。
+瀏覽器請開啟根路徑 `/`；`/mcp` 是 agent 的認證端點，`38471` 是套件 WebSocket port。管理頁須在啟動 server 的電腦開啟。修改或重新建置後，先停止舊程序，再執行 `npm start`。
+
+Windows 設定存於 `%LOCALAPPDATA%\BookMarkdown\mcp-server\config.json`；Linux 與 macOS 使用各自的使用者設定目錄。ENV 可覆寫設定，`BOOKMARKDOWN_CONFIG_FILE` 可指定檔案。詳細路徑、欄位、ENV 與重啟流程見[設定指南](docs/settings.md)。
+
+預設只接受本機連線。需要多台裝置時，在網頁開啟區網並重啟，複製區網 HTTP／WS URL 給 agent 與套件。區網不強制 WSS；管理頁仍僅限本機。請在可信任的區網使用。
+
+保持終端機執行，按 Ctrl+C 停止。Token 不會寫入 log，請勿放入 URL、命令列參數或 source control。
 
 ## 設定 MCP host
 
@@ -100,9 +94,7 @@ npm start
 
 MCP host 不會啟動 daemon。舊的 proxy `command`／`args` 設定需改為 HTTP URL；`proxy` 子命令與 `BOOKMARKDOWN_IPC_PIPE_NAME` 已移除。Daemon 離線時 initialize、tools/list 與 tools/call 都無法連線。HTTP 使用無狀態 JSON 回覆，不建立 MCP session；GET SSE、DELETE 與其他非 POST 方法回 `405`，不支援通知串流或續傳。操作結果不明時不得自動重送。
 
-`BOOKMARKDOWN_MCP_TOKEN` 必填，為 32–512 個不含空白的可列印 ASCII 字元；`BOOKMARKDOWN_MCP_PORT` 預設 `38472`，範圍 1–65535。HTTP 固定綁定 `127.0.0.1`。每次請求都驗證 Bearer token、Host 與 Origin（若有）；Host 僅接受實際 port 的 `127.0.0.1` 或 `localhost`，Origin 僅接受相同的本機 HTTP origin。不提供 CORS 或 HTTP 區網綁定。MCP token 與 extension pairing token 應分別產生。
-
-## 多個 agent
+從管理頁複製目前執行中的 MCP token，填入上方 Authorization header；預設 port 為 `38472`。區網模式改用管理頁顯示的私有 IP URL。MCP `/mcp` 每次請求都驗證 Bearer、Host 與 Origin（若有），不提供 CORS。MCP 與套件配對 token 分開產生。
 
 Daemon 未設定 agent 數量配額；所有 agent 共用預設 **32 個處理中的 HTTP 請求**額度，包含 initialize、tools/list 與 tools/call。`BOOKMARKDOWN_MAX_PENDING_REQUESTS` 可設為 **1–256** 的整數，修改後需重啟 daemon。超限的 HTTP 請求回 `503`，附帶 `Retry-After: 1`。閒置 agent 不占用處理中的請求額度；實際容量也取決於系統資源與工作負載。
 
@@ -114,7 +106,7 @@ Bridge 另以相同設定限制等待中的 browser RPC，超限時工具回 `BR
 
 ## 安全與隱私
 
-WebSocket server 預設綁定 `127.0.0.1`。選用的區網模式只接受單一 RFC1918 IPv4，並要求 TLS 憑證與私密金鑰；不接受 wildcard 位址或未加密的區網連線。Companion extension 必須連線至相符的 `wss://` URL，並信任該憑證。所有連線仍須通過配對 token 驗證；正式模式也會檢查精確的 extension ID allowlist。回傳的分頁標題與 URL metadata 可能包含敏感資訊，記錄或分享工具結果前請確認內容。設定與驗證限制見[瀏覽器整合指南](docs/browser-integration.md)。
+預設 HTTP／WS 綁定 loopback。開啟區網後接受本機或 RFC1918 client，並保留兩組 token、Host／Origin、hello 身分與能力檢查。正式模式的 extension ID allowlist 改為選填；開發模式接受所有相容 ID。管理頁及 token 端點只允許本機使用，另檢查同源請求與 CSRF。HTTP／WS 區網資料未加密；WSS 可透過既有 ENV 選配。設定檔含明文 token，請保護使用者目錄。詳見[設定指南](docs/settings.md)與[瀏覽器整合指南](docs/browser-integration.md)。
 
 ## 開發
 
@@ -124,7 +116,7 @@ npm run typecheck
 npm run build
 ```
 
-開發模式可用 `npm run dev -- daemon` 啟動 daemon，但仍需配對 token。WebSocket contract 與目前驗證範圍請參閱[瀏覽器整合指南](docs/browser-integration.md)。
+開發模式使用 `npm run dev -- daemon`，沿用設定檔與 token，接受所有相容 extension ID。WebSocket contract 與目前驗證範圍請參閱[瀏覽器整合指南](docs/browser-integration.md)。
 
 ## 授權
 

@@ -3,6 +3,7 @@ import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { startDaemon } from './daemon/service.js';
 import type { RuntimeMode } from './config.js';
+import { SettingsStore } from './settings.js';
 
 export async function runCli(
   runtimeMode: RuntimeMode = 'production',
@@ -19,12 +20,15 @@ export async function runCli(
       );
     }
 
+    const settings = await SettingsStore.load();
     const result = await startDaemon({
+      env: settings.effectiveEnv(), settings,
       runtimeMode,
       onLog: (message) => console.error(message),
     });
     console.error(
-      `BookMarkdown daemon listening on ${result.daemon.mcpUrl} and ${result.daemon.webSocketUrl}.`,
+      `BookMarkdown daemon listening on ${result.daemon.mcpUrl} and ${result.daemon.webSocketUrl}.\n` +
+      `Open the settings page in your browser: ${new URL('/', result.daemon.mcpUrl).href}`,
     );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown startup error.';

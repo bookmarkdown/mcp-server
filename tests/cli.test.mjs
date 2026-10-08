@@ -14,7 +14,8 @@ const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const cliToken = '0123456789abcdef0123456789abcdef';
 
 function runCli(args, env = {}, entrypoint = cliPath) {
-  const childEnv = { ...process.env, ...env };
+  const temporary = mkdtempSync(join(tmpdir(), 'bmd-cli-settings-'));
+  const childEnv = { ...process.env, BOOKMARKDOWN_CONFIG_FILE: join(temporary, 'config.json'), ...env };
   if (env.BOOKMARKDOWN_EXTENSION_IDS === null) {
     delete childEnv.BOOKMARKDOWN_EXTENSION_IDS;
   }
@@ -35,6 +36,7 @@ function runCli(args, env = {}, entrypoint = cliPath) {
   return new Promise((resolve, reject) => {
     child.once('error', reject);
     child.once('close', (code, signal) => {
+      rmSync(temporary, { recursive: true, force: true });
       resolve({ code, signal, stdout, stderr });
     });
   });
@@ -111,12 +113,12 @@ test('keeps package defaults in production and routes the dev entrypoint explici
     {
       BOOKMARKDOWN_BRIDGE_TOKEN: cliToken,
       BOOKMARKDOWN_MCP_TOKEN: cliToken,
-      BOOKMARKDOWN_EXTENSION_IDS: null,
+      BOOKMARKDOWN_EXTENSION_IDS: 'invalid',
       NODE_ENV: 'development',
     },
   );
   assert.equal(production.code, 1);
-  assert.match(production.stderr, /BOOKMARKDOWN_EXTENSION_IDS must contain/);
+  assert.match(production.stderr, /BOOKMARKDOWN_EXTENSION_IDS contains an invalid/);
 
   const occupied = createNetServer();
   await new Promise((resolve, reject) => {
@@ -159,13 +161,13 @@ test('starts the built daemon CLI and releases its listeners on shutdown', {
   await new Promise(resolve => httpReserved.listen(0, '127.0.0.1', resolve));
   const httpPort = httpReserved.address().port;
   await new Promise(resolve => httpReserved.close(resolve));
+  const configDirectory = mkdtempSync(join(tmpdir(), 'bmd-cli-start-'));
+  t.after(() => rmSync(configDirectory, { recursive: true, force: true }));
   const child = spawn(process.execPath, [builtCliPath, 'daemon'], {
     cwd: projectRoot,
     env: {
       ...process.env,
-      BOOKMARKDOWN_BRIDGE_TOKEN: cliToken,
-      BOOKMARKDOWN_MCP_TOKEN: cliToken,
-      BOOKMARKDOWN_EXTENSION_IDS: 'a'.repeat(32),
+      BOOKMARKDOWN_CONFIG_FILE: join(configDirectory, 'config.json'),
       BOOKMARKDOWN_WS_PORT: String(address.port),
       BOOKMARKDOWN_MCP_PORT: String(httpPort),
     },
@@ -197,6 +199,13 @@ test('starts the built daemon CLI and releases its listeners on shutdown', {
     clearTimeout(readyTimer);
   }
   assert.equal(stdout, '');
+  const generatedSettings = JSON.parse(readFileSync(join(configDirectory, 'config.json'), 'utf8'));
+  assert.match(generatedSettings.mcpToken, /^[a-f0-9]{64}$/);
+  assert.notEqual(generatedSettings.mcpToken, generatedSettings.bridgeToken);
+  assert.equal(stderr.includes(generatedSettings.mcpToken), false);
+  assert.equal(stderr.includes(generatedSettings.bridgeToken), false);
+  assert.match(stderr, /Open local settings:/);
+  assert.ok(stderr.trimEnd().endsWith(`Open the settings page in your browser: http://127.0.0.1:${httpPort}/`));
   assert.equal(stderr.includes(cliToken), false);
   assert.ok(stderr.includes(`http://127.0.0.1:${httpPort}/mcp`));
   assert.ok(stderr.includes(`WebSocket URL: ws://127.0.0.1:${address.port}/`));

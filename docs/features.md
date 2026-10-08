@@ -1,7 +1,7 @@
 ---
 title: "Available Features"
 description: "BookMarkdown MCP daemon、Streamable HTTP、browser window/tab 工具與目前整合狀態。"
-ms.date: 2026-10-02
+ms.date: 2026-10-03
 ms.topic: reference
 ---
 
@@ -9,7 +9,7 @@ ms.topic: reference
 
 使用者手動以前景程序啟動 daemon，agent 直接透過 `http://127.0.0.1:38472/mcp` 呼叫 MCP Streamable HTTP。stdio proxy 與本機 IPC 已移除；CLI 僅接受 `daemon`，省略時也啟動 daemon。
 
-`npm start` 使用正式模式，`npm run dev -- daemon` 使用開發模式，不依 `NODE_ENV` 判斷模式。兩者皆需 `BOOKMARKDOWN_MCP_TOKEN` 與 `BOOKMARKDOWN_BRIDGE_TOKEN`；正式模式另需精確的 `BOOKMARKDOWN_EXTENSION_IDS`。HTTP port 使用 `BOOKMARKDOWN_MCP_PORT`，預設 `38472`。無狀態 JSON 回覆不建立 MCP session，非 POST 方法回 `405`。Daemon 離線時 initialize、tools/list 與 tools/call 都無法連線。啟動失敗會清理 listener；port 被占用時不掃描其他 port。設定與 migration 見 [README](../README.zh-TW.md)。
+`npm start` 使用正式模式，`npm run dev -- daemon` 使用開發模式，不依 `NODE_ENV` 判斷模式。CLI 自動讀取或建立設定檔與兩組 token，不需 ENV；production extension ID allowlist 為選填。ENV 優先於設定檔，HTTP port 預設 `38472`。MCP 無狀態 JSON 回覆不建立 session，非 POST 方法回 `405`；此限制不適用管理頁 GET。Daemon 離線時 initialize、tools/list 與 tools/call 都無法連線。啟動失敗會清理 listener；port 被占用時不掃描其他 port。設定與 migration 見 [README](../README.zh-TW.md)。
 
 ## 多 agent 容量與操作邊界
 
@@ -45,13 +45,13 @@ instance registry 只存在 daemon 記憶體中，daemon 重啟後會清空。`i
 
 ## 連線與錯誤
 
-daemon 預設在 `127.0.0.1:38471` 接受 WebSocket 連線，可用 `BOOKMARKDOWN_WS_PORT` 指定 port。設定 `BOOKMARKDOWN_WS_HOST` 後，只接受明確的 RFC1918 IPv4；非 loopback 綁定必須提供 TLS 憑證與私密金鑰並使用 WSS，wildcard host 會被拒絕。HTTP Host 必須完全符合綁定位址與實際 port。Origin 在兩種模式都必須符合 `chrome-extension://[a-p]{32}`；正式模式另外要求 ID 精確列於 `BOOKMARKDOWN_EXTENSION_IDS`，開發模式則接受任何符合格式的 ID。兩種模式都要求 hello token 正確，且 hello extension ID 必須等於 Origin ID。Origin 本身不是認證；HTTP agent token 與 extension pairing token 分開設定。Companion extension 必須能設定相符的 WSS URL 並信任憑證，真實瀏覽器端尚未驗證。WebSocket 與 HTTP listener 必須同時成功啟動，否則 daemon 會回復已建立的 listener。
+daemon 預設在 `127.0.0.1:38471` 接受 WebSocket，MCP 在 `127.0.0.1:38472/mcp`。CLI 首次建立設定檔與兩組 token，本機管理頁提供設定、token 遮蔽／複製及多裝置清單。開啟區網後允許私有網路 HTTP／WS，不強制 WSS；管理頁仍限本機。Production extension ID allowlist 選填，development 接受所有相容 ID；兩種模式都保留 Origin、hello 身分與 token 檢查。設定保存需重啟，詳見[設定指南](settings.md)。Listener 必須同時成功啟動，失敗會清理資源。
 
 瀏覽器端連線、hello/ack、RPC 訊息與 client 範例見[瀏覽器整合指南](browser-integration.md)。Companion extension 已實作 WebSocket client 與 browser RPC，相關單元測試已通過；真實 Chrome 整合、Local Network Access、extension 權限與指定 MCP host 的互通性仍未驗證。重連退避已有實作，但尚無專項自動化測試。
 
 HTTP 缺少或不正確的 Bearer token 回 `401`，非法 Host/Origin 回 `403`，body 超限回 `413`，同時處理中的 HTTP 請求超限回 `503`。工具錯誤包含 `EXTENSION_NOT_CONNECTED`、`UNSUPPORTED_OPERATION`、`REQUEST_TIMEOUT`、`REQUEST_CANCELLED`、`EXTENSION_DISCONNECTED`、`EXTENSION_OPERATION_FAILED`、`BRIDGE_BUSY` 與 `INVALID_EXTENSION_RESPONSE`。取消或斷線不會自動重送瀏覽器操作。
 
-WebSocket hello 使用 protocol version `2`。一般註冊要求 app ID `bmd-extension`、browser `chrome`、UUID instance ID、合法裝置別名及與 Origin 相符的 extension ID；正式模式也必須符合 daemon allowlist。Probe 可省略別名且不會註冊 instance。Browser RPC 僅接受 `browser.countOpenTabs`、`browser.countOpenWindows`、`browser.listTabs`、`browser.openTab`、`browser.closeTab` 與 `browser.moveTab`，並在呼叫前檢查 instance capabilities。request ID 用於將回覆配對到原始連線及呼叫。
+WebSocket hello 使用 protocol version `2`。一般註冊要求 app ID `bmd-extension`、browser `chrome`、UUID instance ID、合法裝置別名及與 Origin 相符的 extension ID；正式模式若設定非空 allowlist，ID 必須符合清單。Probe 可省略別名且不會註冊 instance。Browser RPC 僅接受 `browser.countOpenTabs`、`browser.countOpenWindows`、`browser.listTabs`、`browser.openTab`、`browser.closeTab` 與 `browser.moveTab`，並在呼叫前檢查 instance capabilities。request ID 用於將回覆配對到原始連線及呼叫。
 
 ## 驗證狀態與後續工作
 

@@ -1,7 +1,7 @@
 ---
 title: "MCP Streamable HTTP Daemon 架構"
 description: "Agent 直接呼叫 HTTP daemon 與 browser WebSocket bridge 的資料流、安全邊界及生命週期。"
-ms.date: 2026-10-02
+ms.date: 2026-10-03
 ms.topic: concept
 ---
 
@@ -9,7 +9,7 @@ ms.topic: concept
 
 ```mermaid
 flowchart LR
-    A["Agent / MCP host"] <-->|"MCP Streamable HTTP<br/>Bearer token, loopback /mcp"| D["BookMarkdown daemon<br/>MCP tools、instance registry"]
+    A["Agent / MCP host"] <-->|"MCP Streamable HTTP<br/>Bearer token, local / LAN /mcp"| D["BookMarkdown daemon<br/>MCP tools、instance registry"]
     C["Browser extension"] <-->|"WebSocket / WSS<br/>pairing token"| D
 ```
 
@@ -17,7 +17,7 @@ flowchart LR
 
 ## HTTP transport
 
-預設 endpoint 為 `http://127.0.0.1:38472/mcp`，port 由 `BOOKMARKDOWN_MCP_PORT` 設定。HTTP 固定綁定 loopback，與可選用區網 WSS 的 extension listener 分開。每個請求必須提供 `Authorization: Bearer <BOOKMARKDOWN_MCP_TOKEN>`；MCP token 與 extension pairing token 各自設定。
+預設 endpoint 為 `http://127.0.0.1:38472/mcp`，port 由 `BOOKMARKDOWN_MCP_PORT` 設定。HTTP 預設綁定 loopback；設定頁開啟區網後 HTTP／WS 綁定 IPv4 interfaces，不要求 TLS。管理頁仍限 loopback。每個請求必須提供 `Authorization: Bearer <BOOKMARKDOWN_MCP_TOKEN>`；MCP token 與 extension pairing token 各自設定。
 
 使用 SDK `NodeStreamableHTTPServerTransport`，每個 POST 建立獨立 MCP server 與 transport，工具執行共用 daemon bridge，避免不同 client 的 request ID 或協定狀態混用。無狀態模式不建立 `Mcp-Session-Id`，使用 JSON 回覆；notifications/initialized 回 `202`。非 POST 方法回 `405`，不支援 GET SSE 通知串流或 resumability。MCP negotiation、Accept/Content-Type、JSON-RPC parsing 與 protocol header validation 由 SDK 處理。
 
@@ -42,9 +42,13 @@ Bridge 另行以相同設定限制 pending browser RPC；這是另一個計數�
 
 所有 agent 共用 MCP token、instance registry 與工具權限，未提供每個 agent 的身分／權限隔離、分頁獨占、交易或跨 agent 操作順序保證。回覆正確配對不代表瀏覽器狀態互相隔離；兩個 agent 同時修改同一分頁仍可能互相影響，衝突操作應由 agent／host 協調，結果不明時不自動重送。
 
+## 設定與管理頁
+
+設定檔跨重啟保存；instance registry 只在記憶體。網頁保存設定或重建 token 後，服務繼續使用原設定直到重啟；連線卡片顯示目前執行中的值。管理頁列出已配對裝置，不查詢分頁資料。完整路徑與 ENV 規則見[設定指南](settings.md)。
+
 ## 生命週期
 
-1. 驗證 WebSocket 與 HTTP 設定、token、正式模式 extension ID allowlist。
+1. CLI 載入使用者設定檔；首次建立設定與兩組亂數 token。套用 ENV 覆寫並驗證設定，正式模式 allowlist 為選填。
 2. 啟動 WebSocket bridge 與 HTTP listener；任一失敗會清理已建立的資源。不掃描替代 port，重複啟動回報 port 被占用，不再使用 IPC duplicate probe。
 3. Agent 直接 initialize 與 tools/list。Daemon 離線時 HTTP 無法連線；extension 尚未連線時工具回 `EXTENSION_NOT_CONNECTED`。
 4. HTTP response socket 中斷時取消該請求的 bridge 等待，其他請求不受影響。工具錯誤維持安全的 MCP `isError` 回覆。
@@ -53,9 +57,9 @@ Bridge 另行以相同設定限制 pending browser RPC；這是另一個計數�
 
 ## 安全邊界
 
-HTTP 使用 constant-time Bearer token 比較。Host 僅接受實際 port 的 `127.0.0.1` 或 `localhost`；Origin 若存在，必須為相同本機 HTTP origin，否則回 `403`。不啟用 CORS，不提供 HTTP 區網綁定。缺少或不正確的 Authorization 回 `401`。Token 不得放在 URL、log 或 source control。
+MCP HTTP 使用 constant-time Bearer token 比較。Host 必須是實際 port 的 loopback 或已綁定私有介面 IP；Origin 若存在須與 Host 同源。只接受 loopback／RFC1918 peers，不提供 CORS。缺少或錯誤的 Authorization 回 `401`。管理頁以 loopback peer、loopback Host、Origin 與 CSRF 隔離，token 僅在本機專用 POST 端點提供；不出現在一般狀態或 log。
 
-Extension WebSocket 保留 pairing token、production extension ID allowlist、Origin 與 hello ID 一致性驗證，以及可選用 RFC1918 WSS。Browser RPC 保留 operation allowlist、strict schemas 與 instance capability 檢查。分頁 metadata 可能敏感，不記錄操作 payload，不讀取頁面內容；排除 incognito 屬 extension 責任。
+Extension WebSocket 保留 pairing token、選填 production extension ID allowlist、Origin 與 hello ID 一致性驗證，以及私有區網 WS／選配 WSS。Browser RPC 保留 operation allowlist、strict schemas 與 instance capability 檢查。分頁 metadata 可能敏感，不記錄操作 payload，不讀取頁面內容；排除 incognito 屬 extension 責任。
 
 ## 驗證範圍
 

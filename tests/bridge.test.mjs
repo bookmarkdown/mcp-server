@@ -300,7 +300,7 @@ test('fails daemon startup when the configured WebSocket port is occupied', supp
   }
 });
 
-test('rejects wildcard and unencrypted LAN WebSocket bindings', supportedPlatforms, async () => {
+test('rejects wildcard without LAN opt-in and public WebSocket bindings', supportedPlatforms, async () => {
   const port = await reservePort();
   const signalTarget = new EventEmitter();
   await assert.rejects(
@@ -308,14 +308,14 @@ test('rejects wildcard and unencrypted LAN WebSocket bindings', supportedPlatfor
       env: makeEnvironment(port, { host: '0.0.0.0' }),
       signalTarget,
     }),
-    /BOOKMARKDOWN_WS_HOST must be 127\.0\.0\.1 or a private RFC1918 IPv4 address/,
+    /BOOKMARKDOWN_WS_HOST must be/,
   );
   await assert.rejects(
     startDaemon({
-      env: makeEnvironment(port, { host: '192.168.1.10' }),
+      env: makeEnvironment(port, { host: '8.8.8.8' }),
       signalTarget,
     }),
-    /LAN WebSocket bindings require a TLS certificate and private key/,
+    /BOOKMARKDOWN_WS_HOST must be/,
   );
 });
 

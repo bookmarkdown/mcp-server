@@ -1,4 +1,5 @@
 import { isIP } from 'node:net';
+import { lanEnabled } from './network.js';
 
 export type RuntimeMode = 'development' | 'production';
 
@@ -60,11 +61,13 @@ export function parseBridgeConfig(
     return { ok: false, reason: 'Runtime mode must be production or development.' };
   }
 
-  const host = env.BOOKMARKDOWN_WS_HOST ?? defaults.host;
-  if (host !== defaults.host && !isPrivateIpv4Address(host)) {
+  let lan: boolean;
+  try { lan = lanEnabled(env); } catch (error) { return { ok: false, reason: (error as Error).message }; }
+  const host = env.BOOKMARKDOWN_WS_HOST ?? (lan ? '0.0.0.0' : defaults.host);
+  if (host !== defaults.host && !(lan && host === '0.0.0.0') && !isPrivateIpv4Address(host)) {
     return {
       ok: false,
-      reason: 'BOOKMARKDOWN_WS_HOST must be 127.0.0.1 or a private RFC1918 IPv4 address.',
+      reason: 'BOOKMARKDOWN_WS_HOST must be 127.0.0.1, a private RFC1918 IPv4 address, or 0.0.0.0 with LAN enabled.',
     };
   }
 
@@ -74,12 +77,6 @@ export function parseBridgeConfig(
     return {
       ok: false,
       reason: 'BOOKMARKDOWN_WS_TLS_CERT_FILE and BOOKMARKDOWN_WS_TLS_KEY_FILE must be configured together.',
-    };
-  }
-  if (host !== defaults.host && (!tlsCertFile || !tlsKeyFile)) {
-    return {
-      ok: false,
-      reason: 'LAN WebSocket bindings require a TLS certificate and private key.',
     };
   }
 
@@ -105,12 +102,6 @@ export function parseBridgeConfig(
       .split(',')
       .map((extensionId) => extensionId.trim())
       .filter(Boolean);
-    if (extensionIds.length === 0) {
-      return {
-        ok: false,
-        reason: 'BOOKMARKDOWN_EXTENSION_IDS must contain at least one exact Chrome extension ID.',
-      };
-    }
 
     if (extensionIds.some((extensionId) => !/^[a-p]{32}$/.test(extensionId))) {
       return {

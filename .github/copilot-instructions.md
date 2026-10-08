@@ -6,7 +6,7 @@ ms.date: 2026-10-02
 
 ## 專案範圍
 
-本 repository 負責 BookMarkdown MCP daemon 與其 loopback 或 TLS 保護的私有區網 WebSocket bridge。使用者啟動 daemon，MCP host 直接透過 loopback Streamable HTTP `/mcp` 呼叫；另一個 repository 的 browser extension 是 WebSocket client。
+本 repository 負責 BookMarkdown MCP daemon 與其 loopback 或可選的私有區網 WebSocket bridge。使用者啟動 daemon，MCP host 直接透過本機或區網 Streamable HTTP `/mcp` 呼叫；另一個 repository 的 browser extension 是 WebSocket client。
 
 * 不要在本 repository 實作或修改 Chrome extension、manifest、service worker、options UI 或 extension 權限。
 * 不要新增假 MV3 extension 作為測試工具。WebSocket 行為使用一般 JavaScript/Node.js client 驗證。
@@ -16,13 +16,13 @@ ms.date: 2026-10-02
 
 ## 架構與協定
 
-* MCP transport 使用 `@modelcontextprotocol/node` v2 的 `NodeStreamableHTTPServerTransport`，每個 POST 建立獨立 MCP server／transport，使用無狀態 JSON 回覆。HTTP 固定綁定 `127.0.0.1`，port 由 `BOOKMARKDOWN_MCP_PORT` 設定，預設 `38472`。每次請求驗證 `BOOKMARKDOWN_MCP_TOKEN` Bearer token、Host 與 Origin（若有）；不提供 CORS 或 HTTP 區網綁定。
+* MCP transport 使用 SDK v2 `NodeStreamableHTTPServerTransport`，每個 POST 獨立 server／transport，無狀態 JSON 回覆。HTTP 預設 loopback，區網開關允許 IPv4 wildcard binding 與私有 peers／Hosts；每次 MCP 請求驗證 Bearer、Host、Origin，不提供 CORS。CLI 首次建立使用者設定與兩組 token，ENV 優先；設定頁僅限本機、保存後重啟生效。
 * MCP 回覆透過 HTTP 傳送；daemon stdout 不輸出協定訊息，診斷、啟動狀態與錯誤寫到 stderr。
-* WebSocket 是獨立的應用層 RPC channel，不是 MCP transport。預設只綁定 `127.0.0.1:38471`。只有明確設定單一 RFC1918 IPv4 位址並同時提供 TLS certificate/key 時才允許私有區網綁定；不得使用 wildcard 或公開網路位址，也不得掃描替代 port 或連到占用 port 的其他程序。
+* WebSocket 是獨立應用層 RPC，預設 loopback。區網開關可綁定 `0.0.0.0`，只接受 loopback／RFC1918 peers 與本機私有 Host；TLS 為選配，不強制 WSS。不掃描替代 port。
 * HTTP 或 WebSocket port 占用、設定失效時，daemon 啟動失敗並清理已建立的資源。Daemon 離線時 initialize、tools/list 與 tools/call 都無法連線。
 * `npm start` 與套件 CLI 未提供子命令時預設啟動 production daemon；CLI 僅接受 `daemon`，stdio proxy 與 IPC 已移除。`npm run dev -- daemon` 明確使用 development。不要從 `NODE_ENV` 推斷 runtime mode。
-* WebSocket Origin 在兩種模式都必須符合 `chrome-extension://[a-p]{32}`，hello extension ID 必須等於 Origin ID，並通過 pairing token 驗證。Production 另外要求精確符合 `BOOKMARKDOWN_EXTENSION_IDS`；development 不使用固定 ID allowlist。Origin 不是認證；不得把 token 放進 URL、命令列參數、log、MCP 回覆或 source control。
-* 不使用 IPC health 或 duplicate-daemon probe；重複啟動回報 port 被占用。HTTP agent token 與 extension pairing token 各自設定；所有 agent 共用 instances 與工具權限，不提供每個 agent 的權限隔離或分頁獨占。
+* WebSocket Origin 在兩種模式都必須符合 `chrome-extension://[a-p]{32}`，hello extension ID 必須等於 Origin ID，並通過 pairing token 驗證。Production 若設定非空 `BOOKMARKDOWN_EXTENSION_IDS` 才要求符合清單；development 不使用固定 ID allowlist。Origin 不是認證；不得把 token 放進 URL、命令列參數、log、MCP 回覆或 source control。
+* 不使用 IPC health 或 duplicate-daemon probe；重複啟動回報 port 被占用。HTTP agent token 與 extension pairing token 獨立亂數產生並保存；所有 agent 共用 instances 與工具權限，不提供每個 agent 的權限隔離或分頁獨占。
 * 所有訊息、參數、回覆都要驗證 schema。維持 payload、連線數、註冊 instance 數、pending request 數與 timeout 上限；只接受明確 allowlist 的操作。
 * request/response 以唯一 ID 關聯，並限定在原連線內；處理逾時、斷線、取消和 shutdown 時清除 pending state。副作用操作若未取得結果，不可自動重送。
 * companion extension contract 目前仍是提案。開始跨 repository 整合或變更 wire format 前，先檢查目前版本與兩側實作；不可把提案中的所有功能當成已核准或已實作。
@@ -44,7 +44,7 @@ Extension 必須在計數與清單中排除 incognito 視窗和分頁；server �
 * 安裝後可執行 `npm test`、`npm run typecheck`、`npm run build`。`npm test` 會先 build 再執行 `node:test`。
 * 新增或修改 WebSocket 行為時，使用一般 Node.js WebSocket client 測試握手、驗證、request/response 關聯、逾時、斷線、限制與 MCP 結果。測試不得依賴 Chrome 或未實作的 extension。
 * 每次修改後先跑能檢查該行為的窄測試，再依風險執行完整測試、typecheck 和 build。不要宣稱未執行的檢查已通過。
-* 保留 loopback 預設綁定；非 loopback 綁定僅允許明確設定的 RFC1918 IPv4 並要求 TLS。維持 stdout/stderr 分工和 fail-closed 認證。不得在錯誤訊息或 log 印出 pairing token、敏感 URL 或頁面內容。
+* 保留 loopback 預設綁定；區網開關接受私有網路 HTTP／WS，不要求 TLS；管理頁仍以 loopback／Host／Origin／CSRF 保護。維持 stdout/stderr 分工和 fail-closed 認證。不得在錯誤訊息或 log 印出 pairing token、敏感 URL 或頁面內容。
 * 已發布的 `@bookmarkdown/mcp-server@0.2.1` 支援 Windows/Linux；目前 source checkout 另支援 macOS。CI 在 Ubuntu、Windows 與 macOS 驗證測試、型別及乾淨套件安裝與 MCP initialize。這不代表真實 extension/MCP host 互通性已驗證。發布前須確認 npm Trusted Publisher 設定可讓 workflow 透過 OIDC 發布。除非使用者明確要求，不得執行實際發布。
 
 ## 文件維護

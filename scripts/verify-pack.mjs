@@ -52,6 +52,9 @@ try {
     "dist/cli.js",
     "dist/daemon/service.js",
     "dist/http-config.js",
+    "dist/settings.js",
+    "dist/management/service.js",
+    "dist/management/page.js",
     "dist/server.js",
     "LICENSE",
     "README.md",
@@ -102,6 +105,7 @@ try {
   daemon = spawn(process.execPath, [join(installedPackageDirectory, 'dist', 'cli.js'), 'daemon'], {
     cwd: installDirectory,
     env: { ...process.env, BOOKMARKDOWN_MCP_TOKEN: token, BOOKMARKDOWN_BRIDGE_TOKEN: token,
+      BOOKMARKDOWN_CONFIG_FILE: join(installDirectory, 'config.json'),
       BOOKMARKDOWN_EXTENSION_IDS: 'a'.repeat(32), BOOKMARKDOWN_MCP_PORT: String(httpPort),
       BOOKMARKDOWN_WS_PORT: String(wsPort) },
     stdio: ['ignore', 'pipe', 'pipe'],
