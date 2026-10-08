@@ -79,7 +79,7 @@ test('local management masks tokens, rejects forged requests, saves then restart
   await store.save({ ...editable(store), mcpPort: await port(), webSocketPort: await port() });
   let daemon = await start(t, store); const url = new URL(daemon.mcpUrl).origin;
   const page = await fetch(url + '/'); const html = await page.text();
-  assert.equal(page.status, 200); assert.match(html, /bookmarkdown<span>mcp-server/);
+  assert.equal(page.status, 200); assert.match(html, /<h1>BookMarkdown MCP<\/h1>/);
   assert.match(page.headers.get('content-security-policy'), /frame-ancestors 'none'/);
   assert.equal(html.includes(store.settings.mcpToken), false);
   const csrf = /name="csrf-token" content="([a-f0-9]+)"/.exec(html)[1];

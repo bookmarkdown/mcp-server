@@ -9,7 +9,7 @@ ms.topic: reference
 
 The CLI reads a per-user configuration file before listening. First launch creates it with independent random MCP and extension tokens. Environment variables override saved values. Invalid configuration fails startup without replacing the file.
 
-The local management page shows large `bookmarkdown` and `mcp-server` branding, masked tokens with reveal/copy controls, connection URLs, supported protocol clients, connected devices, and editable settings. Saving and token rotation take effect after restarting. Tokens never appear in logs or ordinary status responses.
+The local management page shows a compact `BookMarkdown MCP` header with live status, masked tokens with reveal/copy controls, connection URLs, supported protocol clients, connected devices, and editable settings. Saving and token rotation take effect after restarting. Tokens never appear in logs or ordinary status responses.
 
 Loopback is the default. Enabling LAN binds both listeners to IPv4 interfaces and accepts local/private-network traffic. HTTP and WS are sufficient; TLS is optional for existing deployments. LAN clients authenticate with their respective tokens. Management routes remain restricted to loopback, including when LAN is enabled, with Host, Origin, and CSRF checks.
 

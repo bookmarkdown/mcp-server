@@ -9,7 +9,7 @@ ms.topic: how-to
 
 Build the source checkout and run `npm start`, or run `bookmarkdown-mcp-server` after installing a release containing this feature. No environment variables are required. The CLI creates a versioned JSON configuration with two independent 256-bit random tokens before opening listeners. Subsequent launches read the same file. Invalid, oversized, unknown-version, or unreadable files fail startup without replacing them.
 
-Open the local settings URL printed in the terminal, normally `http://127.0.0.1:38472/`. The page displays `bookmarkdown` and `mcp-server`, current MCP/WS URLs, masked tokens, supported client information, and paired devices. Copy the MCP token into the agent's Bearer Authorization header and the pairing token into the extension's supported configuration screen. No separate management login code is required.
+Open the local settings URL printed in the terminal, normally `http://127.0.0.1:38472/`. The page displays the `BookMarkdown MCP` title with a live status indicator, current MCP/WS URLs, masked tokens, supported client information, and paired devices. Copy the MCP token into the agent's Bearer Authorization header and the pairing token into the extension's supported configuration screen. No separate management login code is required.
 
 The supported client contract is BookMarkdown/BMD Chrome extension protocol `2`, app ID `bmd-extension`. A client must implement this contract and authenticate; accepting any compatible extension ID does not mean arbitrary browser extensions work. Connected instances are discovered through successful pairing. The list is process-local and includes previously connected instances while this daemon remains running. The page never queries tab contents or performs tab mutations.
 
