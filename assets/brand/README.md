@@ -18,4 +18,4 @@ The bookmark silhouette represents saved content. The `BMD` monogram references 
 
 All SVG artwork, including the custom geometric lowercase wordmark, uses paths. There are no font, script, image, or network dependencies. Keep proportions intact and leave at least one M-stem width of clear space. Use the symbol alone at small sizes; recommended minimum symbol width is 32 px.
 
-These assets are supplied separately; the management page has not been modified to use them.
+The final extension logo set is in `bmd-final/`. The management page header and favicon use its `bmd-logo.svg` outline, inlined in `src/management/page.ts`. The other files in this folder are supplied separately and are not used by the page.

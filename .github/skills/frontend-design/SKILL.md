@@ -13,7 +13,7 @@ In this repository the skill applies only to the local settings page in `src/man
 The settings page is an operations tool for developers, not a marketing page. Its audience is someone copying an endpoint and token into an agent or extension, checking paired devices, and changing server settings. Where the guidance below conflicts with these constraints, the constraints win:
 
 - Skip the hero and the "spend boldness in one place" brief. Open with the current status and the connection values users need to copy; keep the page compact and scannable.
-- Use the brand lime `#C6EF8D` on dark green (`assets/brand/bookmarkdown-symbol.svg`) as the single accent. Support both light and dark through `prefers-color-scheme`.
+- Use the brand lime `#C6EF8D` on dark green as the single accent, and the final BMD "留白書籤" logo (`D:\Work\bookmarkdown\logo\bmd-final\bmd-logo.svg`, inlined in `src/management/page.ts`) as the header mark and favicon. Support both light and dark through `prefers-color-scheme`.
 - Use system fonts only. The page CSP (`default-src 'none'; style-src 'self'; script-src 'self'`) forbids external fonts, inline styles, and inline scripts, so keep CSS and JS in the served assets and avoid `style` attributes.
 - Never render tokens in the initial HTML or status responses, and keep the CSRF meta tag, element IDs, and `data-*` hooks that `tests/settings.test.mjs` and the page script rely on.
 - Write UI text in concise Traditional Chinese, sentence case, with the same name for an action across buttons and confirmations.

@@ -7,6 +7,7 @@ export function managementHtml(csrf: string): string {
 <meta name="csrf-token" content="${csrf}">
 <meta name="color-scheme" content="dark light">
 <title>BookMarkdown MCP</title>
+<link rel="icon" type="image/svg+xml" href="/assets/icon.svg">
 <link rel="stylesheet" href="/assets/style.css">
 <script src="/assets/app.js" defer></script>
 </head>
@@ -14,7 +15,7 @@ export function managementHtml(csrf: string): string {
 <header class="topbar">
   <div class="topbar-inner">
     <div class="brand">
-      <svg class="brand-mark" viewBox="0 0 160 160" aria-hidden="true"><path d="M42 18h76a18 18 0 0 1 18 18v106l-56-28-56 28V36a18 18 0 0 1 18-18Z"/></svg>
+      <svg class="brand-mark" viewBox="0 0 100 100" aria-hidden="true"><path fill-rule="evenodd" d="M25 14h50a5 5 0 0 1 5 5v67L50 71 20 86V19a5 5 0 0 1 5-5ZM31 59h9V39l10 13 10-13v20h9V28H59L50 40 41 28H31Z"/></svg>
       <h1>BookMarkdown MCP</h1>
     </div>
     <nav aria-label="頁面區段"><a href="#connect">連線</a><a href="#devices-section">裝置</a><a href="#settings-section">設定</a></nav>
@@ -88,6 +89,8 @@ export function managementHtml(csrf: string): string {
 </html>`;
 }
 
+export const managementIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><style>path{fill:#2f6b13}@media(prefers-color-scheme:dark){path{fill:#c6ef8d}}</style><path fill-rule="evenodd" d="M25 14h50a5 5 0 0 1 5 5v67L50 71 20 86V19a5 5 0 0 1 5-5ZM31 59h9V39l10 13 10-13v20h9V28H59L50 40 41 28H31Z"/></svg>`;
+
 export const managementCss = `:root{
   color-scheme:dark light;
   --bg:#101612;--surface:#17201a;--field:#0f1511;--line:#2a3830;--text:#e7eee8;--muted:#9aaa9f;
@@ -107,7 +110,7 @@ h1,h2,h3,p{margin:0}
 .topbar{position:sticky;top:0;z-index:2;background:var(--bg);border-bottom:1px solid var(--line)}
 .topbar-inner{max-width:880px;margin:auto;padding:12px 24px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 24px}
 .brand{display:flex;align-items:center;gap:10px;margin-right:auto}
-.brand-mark{width:22px;height:22px;fill:var(--accent)}
+.brand-mark{width:26px;height:26px;fill:var(--accent)}
 h1{font-size:16px;font-weight:650}
 nav{display:flex;gap:4px}
 nav a{color:var(--muted);text-decoration:none;padding:4px 10px;border-radius:6px}

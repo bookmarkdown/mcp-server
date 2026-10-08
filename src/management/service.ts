@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { z } from 'zod';
 import { isLoopback } from '../network.js';
 import { editableSettingsSchema, type SettingsStore } from '../settings.js';
-import { managementCss, managementHtml, managementJs } from './page.js';
+import { managementCss, managementHtml, managementIcon, managementJs } from './page.js';
 
 const secretRequest = z.strictObject({ which: z.enum(['mcpToken', 'bridgeToken']) });
 export class ManagementService {
@@ -19,7 +19,7 @@ export class ManagementService {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
-    res.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+    res.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
     if (!isLoopback(req.socket.remoteAddress) || !hosts.includes(req.headers.host ?? '') ||
       (req.headers.origin !== undefined && req.headers.origin !== `http://${req.headers.host}`)) {
       res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' }).end(
@@ -31,6 +31,7 @@ export class ManagementService {
       const assets: Record<string, [string, string]> = {
         '/': ['text/html', managementHtml(this.#csrf)],
         '/assets/style.css': ['text/css', managementCss], '/assets/app.js': ['text/javascript', managementJs],
+        '/assets/icon.svg': ['image/svg+xml', managementIcon],
       };
       const asset = assets[req.url ?? ''];
       if (asset) { res.writeHead(200, { 'Content-Type': `${asset[0]}; charset=utf-8` }).end(asset[1]); return; }
