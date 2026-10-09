@@ -21,7 +21,7 @@ ms.date: 2026-10-02
 * WebSocket 是獨立應用層 RPC，預設 loopback。區網開關可綁定 `0.0.0.0`，只接受 loopback／RFC1918 peers 與本機私有 Host；TLS 為選配，不強制 WSS。不掃描替代 port。
 * HTTP 或 WebSocket port 占用、設定失效時，daemon 啟動失敗並清理已建立的資源。Daemon 離線時 initialize、tools/list 與 tools/call 都無法連線。
 * `npm start` 與套件 CLI 未提供子命令時預設啟動 production daemon；CLI 僅接受 `daemon`，stdio proxy 與 IPC 已移除。`npm run dev -- daemon` 明確使用 development。不要從 `NODE_ENV` 推斷 runtime mode。
-* WebSocket Origin 在兩種模式都必須符合 `chrome-extension://[a-p]{32}`，hello extension ID 必須等於 Origin ID，並通過 pairing token 驗證。Production 若設定非空 `BOOKMARKDOWN_EXTENSION_IDS` 才要求符合清單；development 不使用固定 ID allowlist。Origin 不是認證；不得把 token 放進 URL、命令列參數、log、MCP 回覆或 source control。
+* WebSocket Origin 在兩種模式都必須符合 `chrome-extension://[a-p]{32}`，hello extension ID 必須等於 Origin ID，並通過 pairing token 驗證。Production 若設定非空 `BOOKMARKDOWN_EXTENSION_IDS` 才要求符合清單；development 不使用固定 ID allowlist。Origin 不是認證；不得把 token 放進 HTTP／WS transport URL、命令列參數、log、MCP 回覆或 source control。使用者明確授權的例外為本機管理頁配對連結：經 CSRF 保護的 POST，只在套件 URL fragment 帶入執行中 bridge token；不得擴大為一般 transport 認證或無操作的自動複製。詳見[一鍵配對](../docs/settings.md#one-click-extension-pairing)。
 * 不使用 IPC health 或 duplicate-daemon probe；重複啟動回報 port 被占用。HTTP agent token 與 extension pairing token 獨立亂數產生並保存；所有 agent 共用 instances 與工具權限，不提供每個 agent 的權限隔離或分頁獨占。
 * 所有訊息、參數、回覆都要驗證 schema。維持 payload、連線數、註冊 instance 數、pending request 數與 timeout 上限；只接受明確 allowlist 的操作。
 * request/response 以唯一 ID 關聯，並限定在原連線內；處理逾時、斷線、取消和 shutdown 時清除 pending state。副作用操作若未取得結果，不可自動重送。

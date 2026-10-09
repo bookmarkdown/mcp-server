@@ -1,3 +1,5 @@
+import {DEFAULT_CHROME_EXTENSION_ID} from './pairing-link.js';
+
 export function managementHtml(csrf: string): string {
   return `<!doctype html>
 <html lang="zh-Hant">
@@ -44,6 +46,12 @@ export function managementHtml(csrf: string): string {
       <div class="field"><label for="bridge-token">配對 token</label><div class="copy-row"><input id="bridge-token" type="password" value="••••••••••••••••" readonly><button type="button" data-reveal="bridgeToken">顯示</button><button type="button" data-token-copy="bridgeToken">複製</button></div></div>
       <p class="hint">在套件的 MCP 設定填入 WebSocket 端點與配對 token。</p>
       <p class="hint" id="bridge-token-state"></p>
+      <div class="field"><label for="pair-extension-id">Chrome 套件 ID</label><input id="pair-extension-id" value="${DEFAULT_CHROME_EXTENSION_ID}" minlength="32" maxlength="32" pattern="[a-p]{32}" required spellcheck="false" autocomplete="off"></div>
+      <p class="hint">已預填指定的套件 ID。開發版請改成 chrome://extensions 顯示的 ID；這個欄位不會修改 server 的允許清單。</p>
+      <div class="field"><label for="pair-endpoint">帶入套件的 WebSocket 端點</label><select id="pair-endpoint"></select></div>
+      <div class="rotate"><button type="button" id="pair-open">連接 Chrome 套件</button><button type="button" id="pair-copy">複製配對連結</button></div>
+      <p class="hint" id="pair-feedback" role="status" aria-live="polite"></p>
+      <p class="hint">開啟後會帶入草稿並提示測試，儲存並啟用後才會更新套件。配對連結包含目前生效的配對 token，僅提供給要連接的瀏覽器。套件未安裝或 ID 不符時，請先安裝或修正 ID。</p>
     </div>
     <div id="lan-urls"></div>
     <div class="group" aria-labelledby="h-health">
@@ -104,12 +112,13 @@ export function managementHtml(csrf: string): string {
 </html>`;
 }
 
-export const managementIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><style>path{fill:#2f6b13}@media(prefers-color-scheme:dark){path{fill:#c6ef8d}}</style><path fill-rule="evenodd" d="M25 14h50a5 5 0 0 1 5 5v67L50 71 20 86V19a5 5 0 0 1 5-5ZM31 59h9V39l10 13 10-13v20h9V28H59L50 40 41 28H31Z"/></svg>`;
+export const managementIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><style>path{fill:#000000}@media(prefers-color-scheme:dark){path{fill:#ffffff}}</style><path fill-rule="evenodd" d="M25 14h50a5 5 0 0 1 5 5v67L50 71 20 86V19a5 5 0 0 1 5-5ZM31 59h9V39l10 13 10-13v20h9V28H59L50 40 41 28H31Z"/></svg>`;
 
 export const managementCss = `:root{
   color-scheme:dark light;
   --bg:#101612;--surface:#17201a;--field:#0f1511;--line:#2a3830;--text:#e7eee8;--muted:#9aaa9f;
   --accent:#c6ef8d;--btn:#c6ef8d;--on-btn:#15251d;--danger:#f2958a;
+  --brand:#ffffff;
   --warn-bg:#2b2512;--warn-line:#6b5a1f;--warn-text:#f0d98a;
   --mono:ui-monospace,"Cascadia Mono",Consolas,Menlo,monospace;
   --sans:"Segoe UI Variable","Segoe UI","Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
@@ -117,6 +126,7 @@ export const managementCss = `:root{
 @media(prefers-color-scheme:light){:root{
   --bg:#f5f7f2;--surface:#ffffff;--field:#f5f7f2;--line:#d4dcd0;--text:#17221b;--muted:#566559;
   --accent:#2f6b13;--btn:#2f6b13;--on-btn:#ffffff;--danger:#a8321f;
+  --brand:#000000;
   --warn-bg:#fff4d6;--warn-line:#e3c25a;--warn-text:#5a4300;
 }}
 *{box-sizing:border-box}
@@ -125,7 +135,7 @@ h1,h2,h3,p{margin:0}
 .topbar{position:sticky;top:0;z-index:2;background:var(--bg);border-bottom:1px solid var(--line)}
 .topbar-inner{max-width:880px;margin:auto;padding:12px 24px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 24px}
 .brand{display:flex;align-items:center;gap:10px;margin-right:auto}
-.brand-mark{width:26px;height:26px;fill:var(--accent)}
+.brand-mark{width:26px;height:26px;fill:var(--brand)}
 h1{font-size:16px;font-weight:650}
 nav{display:flex;gap:4px}
 nav a{color:var(--muted);text-decoration:none;padding:4px 10px;border-radius:6px}
@@ -212,6 +222,9 @@ const MASK='••••••••••••••••';
 let noticeTimer;
 let lastCheck;
 let checking=false;
+let pairing=false;
+const PAIR_ID='bookmarkdown.pairing-extension-id';
+try{const saved=localStorage.getItem(PAIR_ID);if(/^[a-p]{32}$/.test(saved||''))$('pair-extension-id').value=saved}catch{}
 const REMINDER='bookmarkdown.client-updates';
 let reminder;
 try{const saved=JSON.parse(localStorage.getItem(REMINDER)||'null');if(saved&&typeof saved.configPath==='string'&&typeof saved.serverInstanceId==='string'&&typeof saved.agents==='boolean'&&typeof saved.bridge==='boolean'&&Array.isArray(saved.extensions)&&saved.extensions.length<=64&&saved.extensions.every(v=>typeof v==='string'&&v.length<=64))reminder=saved}catch{}
@@ -253,6 +266,24 @@ function health(){
   $('health-server').textContent='MCP HTTP：'+(lastCheck?.server==='passed'?'已通過認證與工具目錄檢查':lastCheck?.server==='failed'?'檢查失敗；確認執行中的 MCP 設定':'服務運行中，尚未檢查 MCP');
   $('health-extension').textContent='套件：'+(select.value&&lastCheck?.extension!=='missing'?'已註冊裝置':'尚未註冊，先在套件儲存並啟用 bridge');
   $('health-tool').textContent='唯讀工具：'+(lastCheck?.tool==='passed'?'分頁計數成功':lastCheck?.tool==='failed'?'讀取失敗；確認套件在線與能力':'尚未驗證');
+}
+function pairingEndpoints(){
+  const select=$('pair-endpoint');const previous=select.value;select.replaceChildren();
+  for(const url of new Set([state.webSocketUrl,...state.lanEndpoints.map(value=>value.webSocketUrl)])){
+    const option=el('option','',url);option.value=url;select.append(option);
+  }
+  if([...select.options].some(option=>option.value===previous))select.value=previous;
+}
+async function handoffPairing(open){
+  const id=$('pair-extension-id');if(pairing||!id.reportValidity())return;
+  pairing=true;$('pair-open').disabled=true;$('pair-copy').disabled=true;
+  try{
+    const result=await api('/api/pairing-link',{extensionId:id.value,endpointUrl:$('pair-endpoint').value});
+    try{localStorage.setItem(PAIR_ID,id.value)}catch{}
+    if(open)location.assign(result.url);
+    else{await copy(result.url);note('已複製配對連結，包含目前生效的配對 token。只分享給要連接的瀏覽器。','pair-feedback')}
+  }catch{note('無法建立配對連結。請確認 server 仍在執行、套件 ID 正確，然後重試。','pair-feedback')}
+  finally{pairing=false;$('pair-open').disabled=false;$('pair-copy').disabled=false}
 }
 function credentialState(){
   const changes=state.pendingChanges||[];
@@ -299,7 +330,7 @@ async function refresh(initial=false){
   $('restart').hidden=!state.restartRequired;
   $('mcp-url').value=state.mcpUrl;$('ws-url').value=state.webSocketUrl;
   $('mode').textContent=state.runtimeMode==='development'?'開發模式：任何符合協定、通過 token 驗證的 Chrome 套件皆可連線。':state.allowlistEnabled?'已啟用 extension ID 允許清單。':'不需預先登記 ID；接受符合協定並通過 token 驗證的 Chrome 套件。';
-  deviceList(state.devices);lanList(state.lanEndpoints);health();credentialState();
+  deviceList(state.devices);lanList(state.lanEndpoints);health();credentialState();pairingEndpoints();
   $('agent-template').textContent='URL: '+state.mcpUrl+'\\nAuthorization: Bearer <貼入 Agent MCP token>';
   if(initial){
     const extra=state.environmentOnly;
@@ -317,6 +348,7 @@ async function refresh(initial=false){
 document.addEventListener('click',async event=>{
   const button=event.target.closest('button');if(!button)return;
   try{
+    if(button.id==='pair-open'||button.id==='pair-copy')await handoffPairing(button.id==='pair-open');
     if(button.id==='dismiss-client-updates'){reminder=undefined;saveReminder();$('client-updates').hidden=true}
     if(button.id==='check-connection'&&!checking){
       checking=true;button.disabled=true;lastCheck=undefined;

@@ -15,6 +15,45 @@ The supported client contract is BookMarkdown/BMD Chrome extension protocol `2`,
 
 For local BMD setup, copy the browser-extension card's WebSocket URL and pairing token into Options → Settings → MCP. Test, then choose Save and enable in the updated extension; separate Save and enable controls remain available. The verify/save/register steps distinguish a successful probe from saved settings and a registered device. Use the agent card's separate MCP token only in the host's Authorization header. Templates use token placeholders and copy actions require an explicit click. Released server `0.4.0` is the historical WS baseline; guided management UX and health checks require this updated source build and are unreleased. See [integration evidence](browser-integration.md).
 
+## One-click extension pairing
+
+The updated source adds **Connect Chrome extension** (`連接 Chrome 套件`) and
+**Copy pairing link** (`複製配對連結`) to the Browser extension card. This new
+handoff is not yet released. Update/rebuild both repositories and restart the
+daemon/reload the extension before using it.
+
+1. Confirm the target Chrome extension ID. The initial value is
+   `kdnjdggdbibdliholcdkmdkajacdmnhd`, supplied by the user; it does not establish
+   that the extension is published or installed. For unpacked builds use the
+   actual ID from `chrome://extensions`. Successful link creation saves only the
+   ID in this management browser's localStorage, without changing the daemon
+   allowlist or configuration file.
+2. Choose the running local WS endpoint or an advertised private-IP LAN endpoint.
+   Connect opens the extension in the current tab. Copy produces a credential-
+   containing link to paste into the destination Chrome address bar.
+3. The extension validates the fragment parameters, clears the current URL and
+   fills an unsaved draft. Its dialog offers Test connection now or Test later.
+   Neither import nor testing saves credentials, enables a bridge, or registers
+   a device. Save and enable remains explicit; invalid links and failed probes
+   leave saved settings intact.
+
+`POST /api/pairing-link` retains local-only Host/Origin/CSRF and JSON protections.
+It accepts a valid `[a-p]{32}` extension ID and only a currently advertised WS
+endpoint. The response uses the running bridge token, never the Agent token or
+pending rotation. Status, HTML, MCP tool results and logs contain no pairing link.
+
+The link targets `options.html#/settings/mcp?host=<encoded-WS-URL>&token=<encoded-pairing-token>`.
+This explicit credential handoff is the exception to the transport-URL rule:
+tokens still cannot be placed in HTTP MCP or WebSocket endpoint URLs. Only the
+Options HTML is web accessible to HTTP `127.0.0.1`/`localhost` origins, including
+custom ports; other websites are not authorized navigation origins. No additional
+host permission, external runtime API, TLS or one-time-code service is required.
+Management remains local-only. Copying a LAN link for pasting into another
+browser does not expose the management page remotely. Clearing the current URL
+does not erase clipboard or other historical copies; provide the link only to
+the browser being paired. Missing/wrong-ID/older extensions require installation,
+an ID correction or manual pairing.
+
 ## Storage location
 
 | OS | Default file |
