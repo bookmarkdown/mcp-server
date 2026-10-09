@@ -9,6 +9,8 @@ BookMarkdown MCP Server lets agents call a local daemon directly through MCP Str
 
 The current source adds guided pairing, running/pending token states, a browser-local reminder to update clients after restart, and a three-stage read-only connection check. These management improvements are unreleased; build and run the updated source to use them. Local/private LAN WS still requires no certificate.
 
+The latest source also provides one-click extension pairing: choose the target ID and running WS endpoint, open the extension with a prefilled draft, test, then explicitly save and enable. A separate copy-link action supports pasting into another LAN browser. This handoff requires the updated extension and server; see [one-click setup](docs/settings.md#one-click-extension-pairing).
+
 ## Features
 
 The server exposes these MCP tools:
@@ -78,7 +80,7 @@ Windows uses `%LOCALAPPDATA%\BookMarkdown\mcp-server\config.json`; Linux and mac
 
 Loopback is the default. For a trusted LAN, enable LAN in the page, save and restart. Agents use the displayed private-IP HTTP URL and BMD uses `ws://<server-private-ip>:38471/` with the separate pairing token. The updated BMD source build accepts RFC1918 IPv4 WS without certificates; WSS is optional. Management remains local-only. Use the updated extension build for this policy; see the [settings guide](docs/settings.md).
 
-Keep the terminal running; press Ctrl+C to stop. Logs omit tokens. Do not put tokens in URLs, command-line arguments, or source control.
+Keep the terminal running; press Ctrl+C to stop. Logs omit tokens. Do not put tokens in transport URLs, command-line arguments, or source control. The explicit extension-pairing link is a credential handoff in a URL fragment; share it only with the browser being paired.
 
 ## Configure an MCP host
 

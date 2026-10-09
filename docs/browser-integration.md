@@ -27,6 +27,8 @@ ms.topic: how-to
 
 Browser integration 文件應涵蓋的範圍與維護規則見[文件規約](documentation-conventions.md)。
 
+本次一鍵配對以目前 server source `0.4.1` 加上本次修改驗證：Node 測試 49 項中 46 項通過、3 項 Windows 不適用情境略過，typecheck/build 通過；companion extension 205 項單元測試、compile/build 通過。Chrome 完整執行 74 項，72 項通過，2 項因既有版本預期 `0.4.0` 與 source `0.4.1` 不同而失敗；指定實際版本重跑後兩項通過，沒有 flaky 或隱藏重試。兩份報告共 169 張截圖已檢視。新增四項涵蓋英文／繁中、亮／暗、390px／1440px 的真實管理頁跳轉與草稿匯入；也驗證 Options 單例、測試不保存、明確啟用、複製連結及錯誤 token／無效 fragment 不改已保存設定。一項使用同機私有網卡，其餘使用 loopback；跨實體 LAN 仍未驗證。這項新增連結功能尚未發布，操作見[設定指南](settings.md#one-click-extension-pairing)。
+
 ## 實際設定流程
 
 1. 安裝 Node.js `22.23.3` 以上版本。新版管理頁使用已建置 source checkout 的 `npm start`；WS 基線可執行 `npx -y @bookmarkdown/mcp-server@0.4.0`。保持終端機開啟，首次產生設定檔及兩組 token，不需先設定 ENV 或 extension ID。
@@ -41,6 +43,10 @@ Browser integration 文件應涵蓋的範圍與維護規則見[文件規約](doc
 | HTTP MCP URL + MCP token | Agent / MCP host | `http://127.0.0.1:38472/mcp`，每次請求傳 Authorization Bearer。 |
 | WebSocket URL + 配對 token | Chrome 套件 | `ws://127.0.0.1:38471/`，token 放 hello 訊息，不能放 URL。 |
 | 管理頁 URL | 啟動 daemon 的電腦 | `http://127.0.0.1:38472/`，不用貼到套件 endpoint 欄位。 |
+
+更新後的兩端 source 另支援管理頁一鍵帶入：預填指定的 Chrome ID `kdnjdggdbibdliholcdkmdkajacdmnhd`，可改開發版 ID；選執行中的本機／LAN WS 端點，按「連接 Chrome 套件」，套件清除片段參數、帶入草稿並提示測試。只有「儲存並啟用」才更新設定及註冊。可明確複製含配對 token 的連結，貼入另一台已安裝套件的 Chrome 網址列；此新增流程尚未發布，詳見[設定指南](settings.md#one-click-extension-pairing)。
+
+`POST /api/pairing-link` 沿用本機／Host／Origin／CSRF 保護，只接受有效 ID 及當前廣告端點，採用目前生效的 bridge token。這是使用者授權的 credential fragment handoff，不是把 token 放進 WS endpoint URL，也不改 HTTP Bearer 或 hello wire contract。Options HTML 只允許本機 HTTP 管理頁來源直接開啟；沒有新增 MCP 工具或外部 runtime 操作。
 
 Server 設定保存與 token 重建後，重啟才生效。重啟前複製／顯示按鈕仍取執行中 token，並標示待生效角色；重啟後提醒更新 Agent 與先前已知裝置。提醒只在管理瀏覽器同源 localStorage 保存無秘密的角色、設定／process 身分及最多 64 個裝置別名／UUID，使用者確認後隱藏；不是 server 端客戶端確認 registry。改 origin／port、清除／禁用儲存或換瀏覽器可能使提醒不保留，詳見[設定指南](settings.md)。
 

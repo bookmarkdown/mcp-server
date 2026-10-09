@@ -5,9 +5,11 @@ import { isLoopback } from '../network.js';
 import { editableSettingsSchema, type SettingsStore } from '../settings.js';
 import { managementCss, managementHtml, managementIcon, managementJs } from './page.js';
 import type { ConnectionCheck } from './connection-check.js';
+import {buildExtensionPairingLink} from './pairing-link.js';
 
 const secretRequest = z.strictObject({ which: z.enum(['mcpToken', 'bridgeToken']) });
 const checkRequest = z.strictObject({ instanceId: z.string().uuid().optional() });
+const pairingRequest = z.strictObject({extensionId: z.string().regex(/^[a-p]{32}$/), endpointUrl: z.string().max(2048)});
 export class ManagementService {
   readonly #csrf = randomBytes(32).toString('hex');
   readonly #initial: string;
@@ -60,6 +62,13 @@ export class ManagementService {
     if (!(req.headers['content-type'] ?? '').startsWith('application/json')) { json(415, { error: 'JSON required.' }); return; }
     try {
       const raw = await readBody(req);
+      if (req.url === '/api/pairing-link') {
+        const {extensionId, endpointUrl} = pairingRequest.parse(raw);
+        const running = this.status() as {webSocketUrl: string; lanEndpoints?: {webSocketUrl: string}[]};
+        const endpoints = [running.webSocketUrl, ...(running.lanEndpoints ?? []).map(value => value.webSocketUrl)];
+        if (!endpoints.includes(endpointUrl)) throw new Error('Endpoint is not advertised by the running daemon.');
+        json(200, {url: buildExtensionPairingLink(extensionId, endpointUrl, this.secrets.bridgeToken)}); return;
+      }
       if (req.url === '/api/connection-check' && this.check) {
         const {instanceId} = checkRequest.parse(raw);
         json(200, await this.check(instanceId)); return;

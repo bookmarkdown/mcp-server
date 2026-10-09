@@ -9,6 +9,8 @@ BookMarkdown MCP Server 讓 agent 直接透過 MCP Streamable HTTP 呼叫本機 
 
 目前 source 新增配對引導、執行中／待生效 token、重啟後更新客戶端提醒與三段唯讀連線檢查。這些管理頁功能尚未發布，需建置並啟動更新後 source；本機／私有 LAN 仍可使用 WS，不需憑證。
 
+最新 source 另支援一鍵配對：確認套件 ID 與執行中 WS 端點，開啟套件帶入草稿、測試，再明確儲存並啟用；也可複製配對連結貼到另一台 LAN 電腦的 Chrome 網址列。此流程需更新兩端，詳見[一鍵配對設定](docs/settings.md#one-click-extension-pairing)。
+
 ## 功能
 
 Server 提供以下 MCP tools：
@@ -78,7 +80,7 @@ Windows 設定存於 `%LOCALAPPDATA%\BookMarkdown\mcp-server\config.json`；Linu
 
 預設只接受本機連線。在網頁開啟區網、儲存並重啟後，可信任 LAN 的 agent 使用顯示的私有 IP HTTP URL，BMD 使用 `ws://<server-private-ip>:38471/` 與獨立配對 token。更新後的 BMD source build 已接受 RFC1918 IPv4 WS，不需憑證；WSS 為選配，管理頁仍僅限本機。須載入更新後的套件建置，詳見[設定指南](docs/settings.md)。
 
-保持終端機執行，按 Ctrl+C 停止。Token 不會寫入 log，請勿放入 URL、命令列參數或 source control。
+保持終端機執行，按 Ctrl+C 停止。Token 不會寫入 log，請勿放入 HTTP／WS 傳輸 URL、命令列參數或 source control。一鍵配對連結是使用者明確操作的例外，僅在套件 URL fragment 帶入配對 token；請只交給要配對的瀏覽器。
 
 ## 設定 MCP host
 

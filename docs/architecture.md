@@ -44,6 +44,8 @@ Bridge 另行以相同設定限制 pending browser RPC；這是另一個計數�
 
 ## 設定與管理頁
 
+管理頁的明確配對操作可呼叫本機 CSRF 保護的 `POST /api/pairing-link`，驗證目標 ID 與當前列出的 WS 端點後，將執行中 bridge token 放入套件設定頁的 URL fragment。套件清除目前網址參數、帶入草稿並提示測試，仍需使用者儲存並啟用；不改 MCP 或 WS wire contract。這是使用者授權的特定 credential handoff，完整範圍見[設定指南](settings.md#one-click-extension-pairing)。
+
 設定檔跨重啟保存；instance registry 只在記憶體。網頁保存設定或重建 token 後，服務繼續使用原設定直到重啟；連線卡片與複製按鈕只提供執行中憑證，並標示待生效角色。管理頁瀏覽器保留不含 token 的更新客戶端提醒，重啟後由使用者確認；不是持久的 server 客戶端確認 registry。
 
 管理頁通常只讀取已知裝置狀態；使用者明確觸發三段健康檢查時，daemon 以執行中 HTTP endpoint／token 執行 initialize、tools/list 與選定線上裝置的 `browser.countOpenTabs`。六秒總逾時，沿用本機 Host／Origin／CSRF 保護；不讀頁面內容、不異動分頁、不新增 MCP 工具。完整邊界見[設定指南](settings.md)。

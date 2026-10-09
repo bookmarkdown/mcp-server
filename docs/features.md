@@ -61,4 +61,6 @@ WebSocket hello 使用 protocol version `2`。一般註冊要求 app ID `bmd-ext
 
 目前 source 新增角色化配對引導、秘密占位符樣板、操作旁提示、執行中／待重啟 token 狀態、重啟後客戶端更新提醒與三段唯讀健康檢查。這些管理頁功能尚未發布，不屬於 npm `0.4.0` 的既有驗證。`EXTENSION_NOT_CONNECTED`／`isError` 契約維持不變，訊息新增先啟用套件的步驟。健康檢查不增加七個工具之外的 MCP 工具，詳見[設定指南](settings.md)。
 
+目前 source 另新增「連接 Chrome 套件」與「複製配對連結」，可選擇執行中的本機／LAN WS 端點，帶入套件的未儲存草稿並提示測試，再由使用者儲存並啟用。目標 ID 預填為使用者指定值，可改為開發版實際 ID；不修改 allowlist，也不新增 MCP 工具。這項配對連結功能尚未發布，需更新兩端，詳見[一鍵配對](settings.md#one-click-extension-pairing)。
+
 設定範圍與本機啟動步驟，請參閱[專案 README](../README.md)。
