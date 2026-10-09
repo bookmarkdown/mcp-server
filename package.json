@@ -1,6 +1,6 @@
 {
   "name": "@bookmarkdown/mcp-server",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "BookMarkdown MCP HTTP server with local settings and a multi-device WebSocket bridge",
   "license": "MIT",
   "repository": {
