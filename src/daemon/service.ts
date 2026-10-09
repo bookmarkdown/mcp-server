@@ -11,6 +11,7 @@ import type { ToolExecutor } from '../tools/executor.js';
 import { allowedHosts, allowedPeer, privateAddresses } from '../network.js';
 import type { SettingsStore } from '../settings.js';
 import { ManagementService } from '../management/service.js';
+import { checkMcpConnection } from '../management/connection-check.js';
 
 type SignalTarget = Pick<EventEmitter, 'once' | 'off'>;
 type DaemonState = 'starting' | 'ready' | 'shutting_down' | 'closed';
@@ -73,7 +74,10 @@ export class DaemonService {
           mcpUrl: `http://${address}:${httpConfig.port}/mcp`,
           webSocketUrl: `${result.config.tlsCertFile ? 'wss' : 'ws'}://${result.config.host === '0.0.0.0' ? address : result.config.host}:${bridge.port}/`,
         })) : [],
-      }));
+      }), async (instanceId) => {
+        const registered = instanceId && bridge.instances.some(device => device.instanceId === instanceId && device.status === 'online');
+        return checkMcpConnection(daemon.mcpUrl, httpConfig.token, registered ? instanceId : undefined);
+      });
     try {
       await new Promise<void>((resolve, reject) => {
         daemon.#httpServer.once('error', reject);
@@ -153,9 +157,18 @@ export class DaemonService {
     this.#active.add(active);
     const abort = () => { if (!res.writableFinished) controller.abort(); };
     res.once('close', abort);
+    // The adapter can return after end() but before the response is flushed.
+    // Keep the request in the drain set until finish/close, so shutdown cannot
+    // destroy its socket while a successful JSON reply is still being written.
+    const responseFinished = new Promise<void>(resolve => {
+      const finish = () => { res.off('finish', finish); res.off('close', finish); resolve(); };
+      res.once('finish', finish);
+      res.once('close', finish);
+    });
     try {
       await server.connect(transport);
       await transport.handleRequest(req, res);
+      await responseFinished;
     } finally {
       controller.abort();
       res.off('close', abort);
@@ -181,11 +194,14 @@ export class DaemonService {
       const timer = setTimeout(finish, this.shutdownDrainMs);
       this.#drainWaiters.add(finish);
     });
+    const forceHttpClose = this.#active.size > 0;
     for (const active of this.#active) { active.controller.abort(); active.response.destroy(); }
     const results = await Promise.allSettled([
       ...[...this.#active].map((active) => active.server.close()), this.bridge.close(),
     ]);
-    this.#httpServer.closeAllConnections();
+    // close() already ends idle sockets gracefully. Forced destruction after a
+    // successful drain can reset a reply still travelling to the client.
+    if (forceHttpClose) this.#httpServer.closeAllConnections();
     await stopped;
     this.#state = 'closed';
     const errors = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');

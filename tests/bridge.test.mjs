@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
+import { Agent } from 'node:http';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { createServer as createNetServer } from 'node:net';
 import { networkInterfaces, tmpdir } from 'node:os';
@@ -76,11 +77,13 @@ async function startDaemonForTest(t, overrides = {}, options = {}) {
   }
 
   const client = new HttpTestClient(daemonResult.daemon.mcpUrl, token);
+  const sockets = new Set();
   t.after(async () => {
+    for (const socket of sockets) socket.terminate();
     client.close();
     await daemonResult.daemon.close();
   });
-  return { client, daemon: daemonResult.daemon, port };
+  return { client, daemon: daemonResult.daemon, port, trackSocket: socket => sockets.add(socket) };
 }
 
 async function reservePort(host = '127.0.0.1') {
@@ -125,21 +128,29 @@ function waitForOpen(socket) {
     socket.once('open', resolve);
     socket.once('error', reject);
     socket.once('unexpected-response', (_request, response) => {
+      response.destroy();
+      _request.destroy();
       reject(new Error(`WebSocket upgrade rejected with ${response.statusCode}.`));
     });
   });
 }
 
 async function getUpgradeStatus(port, origin) {
-  const socket = new WebSocket(`ws://127.0.0.1:${port}`, { origin });
-  const status = await new Promise((resolve) => {
-    socket.once('unexpected-response', (_request, response) => {
-      resolve(response.statusCode);
+  const agent = new Agent({keepAlive: true});
+  const socket = new WebSocket(`ws://127.0.0.1:${port}`, { origin, agent, handshakeTimeout: 2000 });
+  try {
+    return await new Promise((resolve, reject) => {
+      socket.once('unexpected-response', (_request, response) => {
+        resolve(response.statusCode);
+        response.destroy();
+        _request.destroy();
+      });
+      socket.once('error', reject);
     });
-    socket.once('error', () => resolve(0));
-  });
-  socket.terminate();
-  return status;
+  } finally {
+    socket.terminate();
+    agent.destroy();
+  }
 }
 
 function nextMessage(socket) {
@@ -176,6 +187,7 @@ async function connectExtension(bridge, options = {}) {
   const socket = new WebSocket(`ws://127.0.0.1:${bridge.port}`, {
     origin: `chrome-extension://${selectedExtensionId}`,
   });
+  bridge.trackSocket?.(socket);
   await waitForOpen(socket);
   const helloPromise = nextMessage(socket);
   socket.send(
@@ -421,7 +433,7 @@ test('routes a daemon tool call through the proposal-shaped WebSocket RPC', supp
     assert.equal(count.count, 5);
     assert.ok(Number.isFinite(Date.parse(count.countedAt)));
   } finally {
-    socket?.close();
+    socket?.terminate();
   }
 });
 

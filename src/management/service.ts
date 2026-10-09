@@ -1,18 +1,24 @@
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { z } from 'zod';
 import { isLoopback } from '../network.js';
 import { editableSettingsSchema, type SettingsStore } from '../settings.js';
 import { managementCss, managementHtml, managementIcon, managementJs } from './page.js';
+import type { ConnectionCheck } from './connection-check.js';
 
 const secretRequest = z.strictObject({ which: z.enum(['mcpToken', 'bridgeToken']) });
+const checkRequest = z.strictObject({ instanceId: z.string().uuid().optional() });
 export class ManagementService {
   readonly #csrf = randomBytes(32).toString('hex');
   readonly #initial: string;
+  readonly #initialSettings: Record<string, unknown>;
+  readonly #instanceId = randomUUID();
   public constructor(private readonly store: SettingsStore, private readonly port: number,
     private readonly secrets: { mcpToken: string; bridgeToken: string },
-    private readonly status: () => Record<string, unknown>) {
+    private readonly status: () => Record<string, unknown>,
+    private readonly check?: (instanceId?: string) => Promise<ConnectionCheck>) {
     this.#initial = JSON.stringify(store.settings);
+    this.#initialSettings = {...store.settings};
   }
   public async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const hosts = [`127.0.0.1:${this.port}`, `localhost:${this.port}`];
@@ -38,6 +44,9 @@ export class ManagementService {
       if (req.url === '/api/status') {
         const { mcpToken: _mcp, bridgeToken: _bridge, version: _version, ...settings } = this.store.settings;
         json(200, { ...this.status(), settings, configPath: this.store.path, overrides: this.store.overrides,
+          serverInstanceId: this.#instanceId,
+          pendingChanges: Object.entries(this.store.settings).filter(([key, value]) =>
+            JSON.stringify(value) !== JSON.stringify(this.#initialSettings[key])).map(([key]) => key),
           restartRequired: this.#initial !== JSON.stringify(this.store.settings) }); return;
       }
       json(404, { error: 'Not found.' }); return;
@@ -51,6 +60,10 @@ export class ManagementService {
     if (!(req.headers['content-type'] ?? '').startsWith('application/json')) { json(415, { error: 'JSON required.' }); return; }
     try {
       const raw = await readBody(req);
+      if (req.url === '/api/connection-check' && this.check) {
+        const {instanceId} = checkRequest.parse(raw);
+        json(200, await this.check(instanceId)); return;
+      }
       if (req.url === '/api/settings') { await this.store.save(editableSettingsSchema.parse(raw)); json(200, { ok: true }); return; }
       if (req.url === '/api/secrets' || req.url === '/api/rotate') {
         const { which } = secretRequest.parse(raw);

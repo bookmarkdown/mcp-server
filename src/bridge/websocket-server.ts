@@ -155,6 +155,10 @@ export class WebSocketBridgeServer {
     status: 403 | 503,
     reason: string,
   ): void {
+    // Rejected upgrades are not tracked by WebSocketServer. Close their socket
+    // after the HTTP reply is flushed, matching ws's own abort-handshake path.
+    socket.once('error', () => socket.destroy());
+    socket.once('finish', () => socket.destroy());
     socket.end(
       `HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`,
     );

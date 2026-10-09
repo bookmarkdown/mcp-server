@@ -1,7 +1,35 @@
+import {Agent, request as httpRequest} from 'node:http';
+
+// Disposable daemon tests must not share Undici's process-wide connection pool.
+// Consume the entire response before resolving; no request is automatically replayed.
+export async function freshFetch(url, options = {}) {
+  const agent = new Agent({keepAlive: true});
+  const requestSite = new Error('HTTP test request originated here.');
+  try { return await new Promise((resolve, reject) => {
+    const req = httpRequest(url, {agent, method: options.method ?? 'GET',
+      headers: options.headers, signal: options.signal}, res => {
+      const chunks = [];
+      res.on('data', chunk => chunks.push(chunk));
+      res.on('error', reject);
+      res.on('end', () => {
+        const headers = new Headers();
+        for (let i = 0; i < res.rawHeaders.length; i += 2) headers.append(res.rawHeaders[i], res.rawHeaders[i + 1]);
+        resolve(new Response([204, 205, 304].includes(res.statusCode) ? null : Buffer.concat(chunks),
+          {status: res.statusCode, headers}));
+      });
+    });
+    req.on('error', reject);
+    req.end(options.body);
+  }); } catch (error) {
+    error.stack += '\n' + requestSite.stack;
+    throw error;
+  } finally { agent.destroy(); }
+}
+
 export class HttpTestClient {
   constructor(url, token) { this.url = url; this.token = token; this.nextId = 1; }
   async request(method, params = {}, signal) {
-    const response = await fetch(this.url, {
+    const response = await freshFetch(this.url, {
       method: 'POST', signal,
       headers: { Authorization: `Bearer ${this.token}`, 'Content-Type': 'application/json',
         Accept: 'application/json, text/event-stream', 'MCP-Protocol-Version': '2025-11-25' },

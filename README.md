@@ -5,7 +5,9 @@
 BookMarkdown MCP Server lets agents call a local daemon directly through MCP Streamable HTTP. The daemon retains the browser extension WebSocket bridge; the stdio proxy and local IPC have been removed.
 
 > [!IMPORTANT]
-> MCP hosts must use Streamable HTTP; the former stdio proxy is no longer available. Real Chrome, extension, and specific MCP host compatibility remain unverified.
+> MCP hosts must use Streamable HTTP; the former stdio proxy is no longer available. Released server `0.4.0` and the updated BMD `0.0.1` source build have passed loopback and same-machine private-interface WS integration tests on Windows and Chrome 153, using a custom HTTP JSON-RPC test host. Specific MCP products and optional WSS remain unverified; see the [integration evidence](docs/browser-integration.md).
+
+The current source adds guided pairing, running/pending token states, a browser-local reminder to update clients after restart, and a three-stage read-only connection check. These management improvements are unreleased; build and run the updated source to use them. Local/private LAN WS still requires no certificate.
 
 ## Features
 
@@ -68,11 +70,13 @@ For a global installation, run `bookmarkdown-mcp-server`. No environment variabl
 
 Open the local settings URL printed in the terminal, normally `http://127.0.0.1:38472/`. The page shows **bookmarkdown** and **mcp-server** branding, URLs, masked tokens with reveal/copy controls, supported clients, paired devices, and editable settings. Saved settings and regenerated tokens take effect after restarting.
 
+Follow the browser-extension WS/pairing-token guide separately from the Agent HTTP/Bearer guide. Updated BMD supports Test, then Save and enable; probe success alone does not register a device. The management check explicitly verifies HTTP initialize/catalog, device registration and read-only tab counting. Token copy/reveal uses running credentials until restart. See [settings and reminder limits](docs/settings.md).
+
 Open the root path `/` in your browser on the server computer. `/mcp` is the authenticated agent endpoint, and port `38471` is the extension WebSocket listener. After changing or rebuilding the source, stop the old process and run `npm start` again.
 
 Windows uses `%LOCALAPPDATA%\BookMarkdown\mcp-server\config.json`; Linux and macOS use their per-user configuration directories. ENV overrides saved values, and `BOOKMARKDOWN_CONFIG_FILE` selects another file. See the [settings guide](docs/settings.md) for all paths, fields, ENV options, and restart behavior.
 
-Loopback is the default. Enable LAN in the page and restart to connect agents and extensions on multiple devices to one server. Copy the displayed private-IP HTTP/WS URLs. WSS is optional; management remains local-only. Use plaintext LAN connections on a trusted network.
+Loopback is the default. For a trusted LAN, enable LAN in the page, save and restart. Agents use the displayed private-IP HTTP URL and BMD uses `ws://<server-private-ip>:38471/` with the separate pairing token. The updated BMD source build accepts RFC1918 IPv4 WS without certificates; WSS is optional. Management remains local-only. Use the updated extension build for this policy; see the [settings guide](docs/settings.md).
 
 Keep the terminal running; press Ctrl+C to stop. Logs omit tokens. Do not put tokens in URLs, command-line arguments, or source control.
 

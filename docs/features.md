@@ -1,7 +1,7 @@
 ---
 title: "Available Features"
 description: "BookMarkdown MCP daemon、Streamable HTTP、browser window/tab 工具與目前整合狀態。"
-ms.date: 2026-10-03
+ms.date: 2026-10-09
 ms.topic: reference
 ---
 
@@ -41,13 +41,13 @@ Agent 共用認證 token、browser instances 與工具權限。沒有每個 agen
 
 查詢分頁數時，每個 instance 都有 `countStatus` 與 nullable `tabCount`；成功結果包含 `countedAt`。`totalTabs` 僅加總成功的查詢，部分結果會以 `complete: false` 表示。未要求分頁數時，`totalTabs` 為 `null`。
 
-instance registry 只存在 daemon 記憶體中，daemon 重啟後會清空。`includeOffline: false` 只會篩除已知的離線 instance，不會探索尚未連線的瀏覽器設定檔。
+instance registry 只存在 daemon 記憶體中，daemon 重啟後會清空。`includeOffline: false` 只會篩除已知的離線 instance，不會探索尚未連線的瀏覽器設定檔。篩選後沒有 instance 時，`0.4.0` 回 `EXTENSION_NOT_CONNECTED` 工具錯誤，並非空清單；即使 `includeTabCounts: false` 也相同。
 
 ## 連線與錯誤
 
 daemon 預設在 `127.0.0.1:38471` 接受 WebSocket，MCP 在 `127.0.0.1:38472/mcp`。CLI 首次建立設定檔與兩組 token，本機管理頁提供設定、token 遮蔽／複製及多裝置清單。開啟區網後允許私有網路 HTTP／WS，不強制 WSS；管理頁仍限本機。Production extension ID allowlist 選填，development 接受所有相容 ID；兩種模式都保留 Origin、hello 身分與 token 檢查。設定保存需重啟，詳見[設定指南](settings.md)。Listener 必須同時成功啟動，失敗會清理資源。
 
-瀏覽器端連線、hello/ack、RPC 訊息與 client 範例見[瀏覽器整合指南](browser-integration.md)。Companion extension 已實作 WebSocket client 與 browser RPC，相關單元測試已通過；真實 Chrome 整合、Local Network Access、extension 權限與指定 MCP host 的互通性仍未驗證。重連退避已有實作，但尚無專項自動化測試。
+瀏覽器端連線、hello/ack、RPC 訊息與 client 範例見[瀏覽器整合指南](browser-integration.md)。Server `0.4.0` 與 BMD `0.0.1` source build 已通過 Windows、Chrome 153 的真實 loopback 與同機私有網卡 WS 串接測試；使用原始 manifest，沒有額外 host grant。更新後的套件允許 `127.0.0.1` 與 RFC1918 私有 IPv4 根路徑的明文 WS，LAN 不需 WSS 或憑證。跨實體裝置、防火牆、其他 Chrome/LNA 組合、選配 WSS 及指定產品 host 的驗證範圍見整合指南。
 
 HTTP 缺少或不正確的 Bearer token 回 `401`，非法 Host/Origin 回 `403`，body 超限回 `413`，同時處理中的 HTTP 請求超限回 `503`。工具錯誤包含 `EXTENSION_NOT_CONNECTED`、`UNSUPPORTED_OPERATION`、`REQUEST_TIMEOUT`、`REQUEST_CANCELLED`、`EXTENSION_DISCONNECTED`、`EXTENSION_OPERATION_FAILED`、`BRIDGE_BUSY` 與 `INVALID_EXTENSION_RESPONSE`。取消或斷線不會自動重送瀏覽器操作。
 
@@ -55,8 +55,10 @@ WebSocket hello 使用 protocol version `2`。一般註冊要求 app ID `bmd-ext
 
 ## 驗證狀態與後續工作
 
-此 repository 的 Node.js 測試使用 HTTP MCP 與 WebSocket client，涵蓋認證、路由、取消、併發隔離、啟動 rollback、關閉及 browser operation contract。Linux WSS 測試在 Windows 略過。真實 Chrome/extension、Chrome Local Network Access、extension 權限及指定 MCP host 的互通性尚未驗證。
+此 repository 的 Node.js 測試使用 HTTP MCP 與 WebSocket client，涵蓋認證、路由、取消、併發隔離、啟動 rollback、關閉及 browser operation contract。Linux WSS 測試在 Windows 略過。2026-10-09 在 companion extension repository 以 npm 正式版 `0.4.0`、BMD `0.0.1`、Windows、Node.js `24.11.0`、Playwright `1.63.0`、Chrome for Testing `153.0.8010.12` 驗證七個工具、loopback 與同機私有網卡 WS 配對、實際分頁異動及重連。測試 host 為 `bmd-chrome-integration-test/1.0.0` HTTP JSON-RPC client，不能替代指定產品 host 驗收。詳細證據與未測項目見[整合指南](browser-integration.md)。
 
-Companion extension 已實作 daemon 離線後以有上限的指數退避重新連線並重新註冊 instance；重連退避尚無專項自動化測試，且尚未在真實瀏覽器中驗證。
+更新後的 companion extension 對網路錯誤／hello 逾時使用 1／2／4／8／16／30 秒退避並显示下一次倒數；精確序列、停用清理及拒絕認證後停止已由單元測試驗證。重連不重送 browser RPC。長時間 MV3 閒置及 sleep/wake 尚未驗證。
+
+目前 source 新增角色化配對引導、秘密占位符樣板、操作旁提示、執行中／待重啟 token 狀態、重啟後客戶端更新提醒與三段唯讀健康檢查。這些管理頁功能尚未發布，不屬於 npm `0.4.0` 的既有驗證。`EXTENSION_NOT_CONNECTED`／`isError` 契約維持不變，訊息新增先啟用套件的步驟。健康檢查不增加七個工具之外的 MCP 工具，詳見[設定指南](settings.md)。
 
 設定範圍與本機啟動步驟，請參閱[專案 README](../README.md)。

@@ -1,7 +1,7 @@
 ---
 title: Local settings and multi-device setup
 description: Configure the daemon through its local management page and connect LAN agents and extensions.
-ms.date: 2026-10-03
+ms.date: 2026-10-09
 ms.topic: how-to
 ---
 
@@ -11,7 +11,9 @@ Build the source checkout and run `npm start`, or run `bookmarkdown-mcp-server` 
 
 Open the local settings URL printed in the terminal, normally `http://127.0.0.1:38472/`. The page displays the `BookMarkdown MCP` title with a live status indicator, current MCP/WS URLs, masked tokens, supported client information, and paired devices. Copy the MCP token into the agent's Bearer Authorization header and the pairing token into the extension's supported configuration screen. No separate management login code is required.
 
-The supported client contract is BookMarkdown/BMD Chrome extension protocol `2`, app ID `bmd-extension`. A client must implement this contract and authenticate; accepting any compatible extension ID does not mean arbitrary browser extensions work. Connected instances are discovered through successful pairing. The list is process-local and includes previously connected instances while this daemon remains running. The page never queries tab contents or performs tab mutations.
+The supported client contract is BookMarkdown/BMD Chrome extension protocol `2`, app ID `bmd-extension`. A client must implement this contract and authenticate; accepting any compatible extension ID does not mean arbitrary browser extensions work. Connected instances are discovered through successful pairing. The list is process-local and includes previously connected instances while this daemon remains running. The page never queries tab contents or performs tab mutations. An explicit read-only connection check can request the selected device's tab count.
+
+For local BMD setup, copy the browser-extension card's WebSocket URL and pairing token into Options → Settings → MCP. Test, then choose Save and enable in the updated extension; separate Save and enable controls remain available. The verify/save/register steps distinguish a successful probe from saved settings and a registered device. Use the agent card's separate MCP token only in the host's Authorization header. Templates use token placeholders and copy actions require an explicit click. Released server `0.4.0` is the historical WS baseline; guided management UX and health checks require this updated source build and are unreleased. See [integration evidence](browser-integration.md).
 
 ## Storage location
 
@@ -27,17 +29,25 @@ Writes use a temporary file in the same directory, fsync, and rename. Symlink co
 
 ## Save and restart
 
-Ports, LAN mode, timeouts, limits, and an optional production extension-ID allowlist can be edited on the page. Port values must differ. Saves and token regeneration become active after restarting the daemon with Ctrl+C and the startup command. Until then, the connection cards and token copy/reveal buttons show the currently running credentials and endpoints. A restart notice stays visible while saved configuration differs from startup configuration. After rotating tokens and restarting, update the corresponding agents or extensions.
+Ports, LAN mode, timeouts, limits, and an optional production extension-ID allowlist can be edited on the page. Port values must differ. Saves and token regeneration become active after restarting the daemon with Ctrl+C and the startup command. Until then, the connection cards and token copy/reveal buttons show the currently running credentials and endpoints. Each token identifies its running/pending state; a restart notice stays visible while saved configuration differs from startup configuration. After rotating tokens and restarting, update the corresponding agents or extensions.
+
+The management browser retains a reminder of the affected Agent role and up to 64 known device aliases/UUIDs until the user acknowledges updating them after restart. Only config-path identity, process ID, roles and bounded device identifiers enter same-origin localStorage; tokens do not. This is a UI reminder, not server-wide client acknowledgment. Clearing/blocking browser storage, changing the management origin/port, or opening another browser can prevent it from surviving restart. Pending server state remains available while the original process runs. Active-tab refresh after restart reloads the page for the new CSRF token and re-masks revealed credentials.
+
+## Read-only connection checks
+
+The local page distinguishes HTTP MCP availability, authenticated extension registration and a successful tool read. Clicking the check button sends same-origin, CSRF-protected `POST /api/connection-check`, optionally with an online `instanceId`. The daemon uses its own running HTTP URL/token to perform initialize (`2025-11-25`), tools/list, and, for a registered device, `browser.countOpenTabs`, with a six-second total deadline. It does not accept a user-supplied URL/token, open/move/close tabs, or add a new MCP tool. Status/errors contain no credentials or raw transport errors.
+
+With no device, HTTP can pass while registration is missing and tool execution is not run. A passed read establishes the local HTTP→bridge→extension path at that check, not correct configuration of every MCP product host. Settings/rotation/check feedback appears beside its action. Network diagnostics in the extension suggest server, port, firewall, browser Local Network Access and optional WSS certificate checks; a generic WebSocket failure cannot identify which cause applies.
 
 The management page is available only from loopback connections with a loopback Host. It rejects foreign Origins; mutation and secret endpoints also require same-origin POST plus a per-process CSRF token. Ordinary HTML and status responses omit authentication tokens. The page has no CORS access, uses no-store responses, and blocks embedding. Access is based on the local machine boundary, not per-user browser authentication: local processes and other users on the same machine may access it.
 
 ## LAN mode
 
-Enable LAN in the page, save, and restart. Both listeners bind to `0.0.0.0`; the page lists private IPv4 addresses and copyable HTTP/WS URLs. Connect remote agents to `http://<server-private-ip>:38472/mcp` with the MCP token, and extensions to `ws://<server-private-ip>:38471/` with the pairing token. Multiple devices share this one server and its instance registry. The management URL remains `http://127.0.0.1:38472/` on the server computer. Allow the selected ports in your host firewall if required.
+Enable LAN in the page, save, and restart. Both listeners bind to `0.0.0.0`; the page lists private IPv4 addresses and copyable HTTP/WS URLs. Remote agents use `http://<server-private-ip>:38472/mcp` with the MCP token. In an updated BMD source build, paste `ws://<server-private-ip>:38471/` into the MCP endpoint field and use the separate pairing token, then test, save and enable the bridge. Accepted plaintext LAN addresses are RFC1918 IPv4: `10.0.0.0/8`, `172.16.0.0/12`, and `192.168.0.0/16`; the WS path must be `/`. No certificate is required. Multiple devices share this one server and its instance registry. Management remains at `http://127.0.0.1:38472/` on the server computer. Allow the selected ports in your host firewall if required.
 
-LAN does not require certificates or WSS. HTTP/WS carries credentials and data in plaintext, so use it on a trusted private network. The server accepts loopback and RFC1918 peers and validates Host against its own private interface addresses; it ignores forwarded-address headers. Public-address peers/Hosts are rejected. This is not a public deployment or reverse-proxy mode.
+Neither the server nor updated BMD requires certificates or WSS for local/private LAN connections. HTTP/WS carries credentials and data in plaintext, so use it on a trusted private network. Pairing and HTTP tokens, Origin/hello identity, schemas and limits still apply. The server accepts loopback and RFC1918 peers and validates Host against its own private interface addresses; it ignores forwarded-address headers. Public-address peers/Hosts are rejected. This is not a public deployment or reverse-proxy mode.
 
-Existing `BOOKMARKDOWN_WS_HOST` can bind one private IPv4 address. Optional `BOOKMARKDOWN_WS_TLS_CERT_FILE` and `BOOKMARKDOWN_WS_TLS_KEY_FILE` together retain WSS support; clients then need a trusted certificate. These advanced ENV settings are not required by the UI. A custom WS host can differ from the HTTP LAN binding and the page shows it separately. Real Chrome permissions, Local Network Access, companion extension URL support, and specific MCP host compatibility require integration verification.
+Existing `BOOKMARKDOWN_WS_HOST` can bind one private IPv4 address. `BOOKMARKDOWN_WS_TLS_CERT_FILE` and `BOOKMARKDOWN_WS_TLS_KEY_FILE` together optionally enable WSS; only users choosing WSS need a trusted certificate. These ENV settings are not required for LAN WS. A custom WS host can differ from the HTTP LAN binding and the page shows it separately. Exact local/private-interface Chrome results are in the [integration guide](browser-integration.md); separate physical devices, firewall/routing, other Chrome/LNA combinations, optional WSS and specific MCP product hosts require their own verification.
 
 ## Environment overrides
 

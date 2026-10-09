@@ -4,7 +4,7 @@ import { createServer, request } from 'node:http';
 import test from 'node:test';
 import { startDaemon } from '../dist/daemon/service.js';
 import { parseHttpConfig } from '../dist/http-config.js';
-import { HttpTestClient } from './helpers/http-client.mjs';
+import { HttpTestClient, freshFetch as fetch } from './helpers/http-client.mjs';
 const token = 'abcdef0123456789abcdef0123456789abcdef0123456789';
 async function reservePort() {
   const server = createServer();

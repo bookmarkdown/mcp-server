@@ -1,7 +1,7 @@
 ---
 title: "MCP Streamable HTTP Daemon 架構"
 description: "Agent 直接呼叫 HTTP daemon 與 browser WebSocket bridge 的資料流、安全邊界及生命週期。"
-ms.date: 2026-10-03
+ms.date: 2026-10-09
 ms.topic: concept
 ---
 
@@ -44,7 +44,9 @@ Bridge 另行以相同設定限制 pending browser RPC；這是另一個計數�
 
 ## 設定與管理頁
 
-設定檔跨重啟保存；instance registry 只在記憶體。網頁保存設定或重建 token 後，服務繼續使用原設定直到重啟；連線卡片顯示目前執行中的值。管理頁列出已配對裝置，不查詢分頁資料。完整路徑與 ENV 規則見[設定指南](settings.md)。
+設定檔跨重啟保存；instance registry 只在記憶體。網頁保存設定或重建 token 後，服務繼續使用原設定直到重啟；連線卡片與複製按鈕只提供執行中憑證，並標示待生效角色。管理頁瀏覽器保留不含 token 的更新客戶端提醒，重啟後由使用者確認；不是持久的 server 客戶端確認 registry。
+
+管理頁通常只讀取已知裝置狀態；使用者明確觸發三段健康檢查時，daemon 以執行中 HTTP endpoint／token 執行 initialize、tools/list 與選定線上裝置的 `browser.countOpenTabs`。六秒總逾時，沿用本機 Host／Origin／CSRF 保護；不讀頁面內容、不異動分頁、不新增 MCP 工具。完整邊界見[設定指南](settings.md)。
 
 ## 生命週期
 
@@ -52,15 +54,15 @@ Bridge 另行以相同設定限制 pending browser RPC；這是另一個計數�
 2. 啟動 WebSocket bridge 與 HTTP listener；任一失敗會清理已建立的資源。不掃描替代 port，重複啟動回報 port 被占用，不再使用 IPC duplicate probe。
 3. Agent 直接 initialize 與 tools/list。Daemon 離線時 HTTP 無法連線；extension 尚未連線時工具回 `EXTENSION_NOT_CONNECTED`。
 4. HTTP response socket 中斷時取消該請求的 bridge 等待，其他請求不受影響。工具錯誤維持安全的 MCP `isError` 回覆。
-5. `SIGINT`、`SIGTERM` 或 `close()` 停止接受新連線，等待在途請求完成，預設最多 1000 ms。超時後取消等待、關閉 HTTP sockets 與 WebSocket bridge。`close()` 可重複呼叫。
+5. `SIGINT`、`SIGTERM` 或 `close()` 停止接受新連線，等待在途請求的 HTTP response 送完，預設最多 1000 ms。成功送完後正常關閉；僅在超時且仍有請求時取消等待並強制關閉 HTTP sockets，然後關閉 WebSocket bridge。拒絕 upgrade 的 socket 在送完 HTTP 拒絕回覆後關閉。`close()` 可重複呼叫。
 6. 開啟、關閉與移動分頁的結果不明時不自動重送；重新連線與重試決策由 agent／host 負責。
 
 ## 安全邊界
 
 MCP HTTP 使用 constant-time Bearer token 比較。Host 必須是實際 port 的 loopback 或已綁定私有介面 IP；Origin 若存在須與 Host 同源。只接受 loopback／RFC1918 peers，不提供 CORS。缺少或錯誤的 Authorization 回 `401`。管理頁以 loopback peer、loopback Host、Origin 與 CSRF 隔離，token 僅在本機專用 POST 端點提供；不出現在一般狀態或 log。
 
-Extension WebSocket 保留 pairing token、選填 production extension ID allowlist、Origin 與 hello ID 一致性驗證，以及私有區網 WS／選配 WSS。Browser RPC 保留 operation allowlist、strict schemas 與 instance capability 檢查。分頁 metadata 可能敏感，不記錄操作 payload，不讀取頁面內容；排除 incognito 屬 extension 責任。
+Extension WebSocket 保留 pairing token、選填 production extension ID allowlist、Origin 與 hello ID 一致性驗證，以及私有區網 WS／選配 WSS。更新後的 BMD source build 與 server 對齊：本機 `127.0.0.1` 與 RFC1918 私有 IPv4 可使用根路徑明文 WS，不強制 TLS。Browser RPC 保留 operation allowlist、strict schemas 與 instance capability 檢查。分頁 metadata 可能敏感，不記錄操作 payload，不讀取頁面內容；排除 incognito 屬 extension 責任。
 
 ## 驗證範圍
 
-Node.js 測試涵蓋 HTTP initialize、工具目錄、認證、Host/Origin、body 限制、取消、併發隔離、啟動 rollback、關閉與 WebSocket browser RPC。Linux WSS 與 Unix symlink CLI 測試在 Windows 略過。真實 Chrome、extension、Chrome Local Network Access 與指定 MCP host 相容性仍未驗證。設定見 [README](../README.zh-TW.md)，extension contract 見[瀏覽器整合指南](browser-integration.md)。
+Node.js 測試涵蓋 HTTP initialize、工具目錄、認證、Host/Origin、body 限制、取消、併發隔離、啟動 rollback、關閉與 WebSocket browser RPC。Linux WSS 與 Unix symlink CLI 測試在 Windows 略過。Server `0.4.0` 與 BMD `0.0.1` 已在 Windows、Chrome 153 以自訂 HTTP JSON-RPC test host 驗證 loopback 與同機私有網卡 WS 配對、七個工具、實際分頁異動與重啟重連；遠端 WSS、其他 Chrome/LNA 組合與指定產品 MCP host 尚未驗證。環境與測試範圍見[瀏覽器整合指南](browser-integration.md)，設定見 [README](../README.zh-TW.md)。

@@ -10,8 +10,9 @@ import { WebSocket } from 'ws';
 import { SettingsStore, defaultSettingsPath } from '../dist/settings.js';
 import { startDaemon } from '../dist/daemon/service.js';
 import { privateAddresses, allowedPeer, isLoopback } from '../dist/network.js';
-import { HttpTestClient } from './helpers/http-client.mjs';
+import { HttpTestClient, freshFetch as fetch } from './helpers/http-client.mjs';
 import { managementJs } from '../dist/management/page.js';
+import { checkMcpConnection } from '../dist/management/connection-check.js';
 
 async function storeFor(t, env = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'bmd-settings-'));
@@ -30,6 +31,9 @@ async function start(t, store) {
 }
 async function api(url, csrf, body, path = '/api/settings', extras = {}) {
   return fetch(url + path, { method: 'POST', headers: { Origin: url, 'Content-Type': 'application/json', 'X-CSRF-Token': csrf, ...extras }, body: JSON.stringify(body) });
+}
+async function freshStatus(url) {
+  return (await fetch(url + '/api/status')).json();
 }
 test('compiled management JavaScript is syntactically valid', () => {
   assert.doesNotThrow(() => new Script(managementJs));
@@ -86,6 +90,14 @@ test('local management masks tokens, rejects forged requests, saves then restart
   const status = await (await fetch(url + '/api/status')).json();
   assert.deepEqual(status.devices, []); assert.equal(status.restartRequired, false);
   assert.equal(JSON.stringify(status).includes(store.settings.bridgeToken), false);
+  assert.deepEqual(status.pendingChanges, []);
+  assert.equal((await api(url, '', {}, '/api/connection-check')).status, 403);
+  assert.equal((await api(url, csrf, {operation: 'browser.closeTab'}, '/api/connection-check')).status, 400);
+  const emptyCheck = await (await api(url, csrf, {}, '/api/connection-check')).json();
+  assert.equal(emptyCheck.server, 'passed'); assert.equal(emptyCheck.extension, 'missing'); assert.equal(emptyCheck.tool, 'not-run');
+  assert.equal(JSON.stringify(emptyCheck).includes(store.settings.mcpToken), false);
+  assert.deepEqual(await checkMcpConnection(daemon.mcpUrl, 'wrong-token').then(({checkedAt, ...result}) => result),
+    {server: 'failed', extension: 'missing', tool: 'not-run', code: 'HTTP_CHECK_FAILED'});
   const mcpPage = await fetch(url + '/mcp');
   assert.equal(mcpPage.status, 401);
   assert.match(await mcpPage.text(), /請在啟動 server 的電腦開啟設定頁/);
@@ -100,10 +112,14 @@ test('local management masks tokens, rejects forged requests, saves then restart
   assert.equal((await (await fetch(url + '/api/status')).json()).restartRequired, true);
   assert.equal((await api(url, csrf, { token: 'unexpected' })).status, 400);
   assert.equal((await api(url, csrf, { which: 'mcpToken' }, '/api/rotate')).status, 200);
+  assert.ok((await freshStatus(url)).pendingChanges.includes('mcpToken'));
   const activeSecret = await (await api(url, csrf, { which: 'mcpToken' }, '/api/secrets')).json();
   assert.notEqual(activeSecret.token, store.settings.mcpToken);
   await daemon.close(); daemon = await start(t, await SettingsStore.load(store.env));
-  assert.equal((await (await fetch(url + '/api/status')).json()).restartRequired, false);
+  const restartedStatus = await freshStatus(url);
+  assert.equal(restartedStatus.restartRequired, false);
+  assert.notEqual(restartedStatus.serverInstanceId, status.serverInstanceId);
+  assert.deepEqual(restartedStatus.pendingChanges, []);
   assert.equal((await fetch(url + '/mcp', { headers: { Authorization: `Bearer ${activeSecret.token}` } })).status, 401);
   assert.equal((await new HttpTestClient(daemon.mcpUrl, store.settings.mcpToken).initialize()).serverInfo.name, 'bookmarkdown-mcp-server');
 });
@@ -132,6 +148,22 @@ test('LAN exposes authenticated HTTP and WS, accepts compatible IDs, and denies 
   assert.equal((await reply).ok, true);
   const status = await (await fetch(new URL(daemon.mcpUrl).origin + '/api/status')).json();
   assert.equal(status.devices.length, 1); assert.equal(status.devices[0].extensionId, extensionId);
+  const operations = [];
+  ws.on('message', bytes => {
+    const message = JSON.parse(bytes.toString());
+    if (message.type !== 'browser/request') return;
+    operations.push(message.operation);
+    ws.send(JSON.stringify({type: 'browser/response', requestId: message.requestId, ok: true, data: {count: 0, countedAt: new Date().toISOString()}}));
+  });
+  const managementUrl = new URL(daemon.mcpUrl).origin;
+  const html = await (await fetch(managementUrl)).text();
+  const csrf = /name="csrf-token" content="([a-f0-9]+)"/.exec(html)[1];
+  const check = await (await api(managementUrl, csrf, {instanceId: status.devices[0].instanceId}, '/api/connection-check')).json();
+  assert.equal(check.server, 'passed'); assert.equal(check.extension, 'registered'); assert.equal(check.tool, 'passed');
+  assert.deepEqual(operations, ['browser.countOpenTabs']);
+  const missing = await (await api(managementUrl, csrf, {instanceId: '00000000-0000-4000-8000-000000000000'}, '/api/connection-check')).json();
+  assert.equal(missing.extension, 'missing'); assert.equal(missing.tool, 'not-run');
+  assert.deepEqual(operations, ['browser.countOpenTabs']);
   const forbiddenHost = await new Promise((resolve, reject) => {
     const req = request(new URL(daemon.mcpUrl).origin + '/', { headers: { Host: 'evil.example' } }, res => { res.resume(); resolve(res.statusCode); });
     req.on('error', reject); req.end();

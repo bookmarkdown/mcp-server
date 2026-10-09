@@ -1,15 +1,67 @@
 ---
 title: "瀏覽器整合指南"
 description: "瀏覽器 extension 連線至 BookMarkdown MCP Server 本機或私有區網 WebSocket 協定與 client 範例。"
-ms.date: 2026-10-03
+ms.date: 2026-10-09
 ms.topic: how-to
 ---
 
 ## 狀態與驗證範圍
 
-此 repository 的 server 實作 protocol v2 handshake、probe 與 browser RPC，Node.js 測試涵蓋 loopback 及 Linux 私有介面上的 WSS contract。區網 listener 不代表 companion extension 已支援遠端 URL：extension 必須能設定伺服器 `ws://` URL；選用 WSS 時需信任憑證。真實 Chrome extension 互通性、extension 權限、Chrome Local Network Access，以及指定 MCP host 的相容性驗證仍未完成。以下 JavaScript 示範 server 接受的訊息形狀。
+2026-10-09 已使用 npm 發布的 `@bookmarkdown/mcp-server@0.4.0`、BMD extension `0.0.1` source build（基線 `666c2a5` 加上 LAN WS 修改）、Windows、Node.js `24.11.0`、npm `11.4.1`、Playwright `1.63.0` 與 Chrome for Testing `153.0.8010.12` 完成本機與同機私有網卡的真實 WS 串接。Host 是 `bmd-chrome-integration-test/1.0.0` 的 HTTP JSON-RPC client，MCP initialize 協定為 `2025-11-25`，WebSocket 協定為 `2`；並非 Codex、Claude Desktop 或 VS Code 的產品測試。
+
+永久測試在 sibling extension repository 的 `e2e/mcp-integration.spec.ts` 與 `e2e/mcp-server.ts`。兩個情境分別使用 loopback 與 server LAN 模式廣告的 RFC1918 網卡 URL，並各自驗證下表的配對、工具及重啟流程。測試使用原始 production manifest，沒有增加 host grant、LNA bypass、寬鬆 CSP 或 fake extension；兩種 WS 均可直接連線。這不代表最低 Chrome 116、其他 Chrome 版本、跨實體電腦 LAN 或選配 WSS 已驗證。Firefox 依 extension ADR 0012 延後。
+
+上述 npm `0.4.0` 為歷史 WS 基線：companion extension 199 項單元測試、完整 65 項 Chrome E2E、compile/build 通過，125 張附件截圖已檢視。新配對引導、輪替提醒與三段健康檢查已加入目前 source，但尚未發布；完整驗收另用更新後 server source build，不把新功能算入已發布版本。
+
+2026-10-09 更新後的 source 驗收：server typecheck/build 通過，Node 測試 47 項中 44 項通過、3 項 Linux WSS／Unix symlink 情境在 Windows 略過。Companion extension 202 項單元測試、compile/Chrome build、完整 69 項 Chrome E2E 通過，152 張附件截圖已檢視。Server HTTP shutdown／upgrade socket 清理修正後，使用最終 build 重跑本機 WS、LAN WS 與四項 P1/P2 UI 情境，6 項全通過、35 張截圖全數檢視；英文／繁中、390px／1440px、亮／暗主題均無水平溢出。健康檢查實際經過 HTTP initialize、tools/list 與已註冊套件的唯讀計數；沒有增加 MCP 工具或瀏覽器異動操作。
+
+| 情境 | 證據／結果 |
+| --- | --- |
+| 管理頁、套件設定頁與註冊 | 兩組 token 分離、錯誤 token、probe、保存、啟用、別名與 server 裝置清單已驗證。Probe 不會註冊裝置。 |
+| 七個 MCP 工具 | initialize、tools/list、devices.list 及六個分頁／視窗工具通過；Chrome API 核對實際 tab/window ID 與異動結果。 |
+| 讀取 | devices.list 含計數、分頁／視窗計數、listTabs limit/offset 分頁通過。 |
+| 異動 | 空白與指定 URL 的 openTab、跨視窗 moveTab、closeTab 通過；同視窗移動被拒絕。 |
+| 生命週期 | server 重啟與 Chrome 同 profile 重啟後重新註冊，UUID 保持不變；停用後工具回 EXTENSION_NOT_CONNECTED。 |
+| UI、輸出 | 英文桌面、繁中 390px 設定頁與 server 桌面／窄版無水平溢出；page/background console 無錯誤，daemon stdout 空白、stderr 不含 token。 |
+| 尚未驗證 | 真實遠端 WSS/TLS 信任、跨機器 LAN/防火牆、incognito 真實視窗、長時間 MV3 閒置與 sleep/wake、Chrome 116、指定產品 host。Node contract／單元測試不能替代以上證據。 |
 
 Browser integration 文件應涵蓋的範圍與維護規則見[文件規約](documentation-conventions.md)。
+
+## 實際設定流程
+
+1. 安裝 Node.js `22.23.3` 以上版本。新版管理頁使用已建置 source checkout 的 `npm start`；WS 基線可執行 `npx -y @bookmarkdown/mcp-server@0.4.0`。保持終端機開啟，首次產生設定檔及兩組 token，不需先設定 ENV 或 extension ID。
+2. 開啟終端機列出的管理頁，通常是 `http://127.0.0.1:38472/`。從「瀏覽器套件」卡片複製 WebSocket URL 與配對 token。
+3. 在 BMD「設定 → MCP」貼入上述兩個值，按「測試連線」；成功表示 token 與 WebSocket v2 probe 通過，尚未保存或註冊裝置。
+4. 按「儲存並啟用」，或先「儲存」再勾選「保持 bridge 連線」。步驟列分清驗證、儲存與註冊。套件顯示「已連線」，管理頁出現裝置名稱才算持久連線完成；別名設定放在配對後，UUID 跨重連保持不變。
+5. 將管理頁「Agent」卡片的 HTTP URL 與 MCP Bearer token 填入支援 Streamable HTTP 的 host。不要把 pairing token 用作 HTTP Bearer；具體 host JSON 欄位依產品而異。Host 不會自動啟動 daemon。
+6. 呼叫 `devices.list` 取得 instance UUID，再呼叫 browser tools。`devices.list` 在篩選後沒有裝置時回 `EXTENSION_NOT_CONNECTED`，不是空陣列；管理頁此時仍可正常使用。
+
+| 欄位 | 使用者 | 預設 URL／用途 |
+| --- | --- | --- |
+| HTTP MCP URL + MCP token | Agent / MCP host | `http://127.0.0.1:38472/mcp`，每次請求傳 Authorization Bearer。 |
+| WebSocket URL + 配對 token | Chrome 套件 | `ws://127.0.0.1:38471/`，token 放 hello 訊息，不能放 URL。 |
+| 管理頁 URL | 啟動 daemon 的電腦 | `http://127.0.0.1:38472/`，不用貼到套件 endpoint 欄位。 |
+
+Server 設定保存與 token 重建後，重啟才生效。重啟前複製／顯示按鈕仍取執行中 token，並標示待生效角色；重啟後提醒更新 Agent 與先前已知裝置。提醒只在管理瀏覽器同源 localStorage 保存無秘密的角色、設定／process 身分及最多 64 個裝置別名／UUID，使用者確認後隱藏；不是 server 端客戶端確認 registry。改 origin／port、清除／禁用儲存或換瀏覽器可能使提醒不保留，詳見[設定指南](settings.md)。
+
+管理頁明確觸發健康檢查時，以執行中 HTTP MCP URL／token 執行 initialize、tools/list 及選定線上裝置的 `browser.countOpenTabs`，六秒總逾時。三段狀態分開 HTTP 可用、已註冊與讀取通過；沒有裝置時讀取不執行。此操作不異動分頁、不新增 MCP 工具，也不能代替指定產品 host 的設定驗收。
+
+## 難度、取捨與 UX
+
+同機串接評估為低到中：已安裝 Node 與 extension 時，不需固定 ID、ENV 或憑證，但需要分辨兩組 URL/token，並完成測試、保存、啟用。新手或另一種 MCP host 為中等：涉及 Node 安裝、終端機生命週期與 HTTP/Bearer 支援。可信任 LAN 串接為中等：啟用 server LAN、重啟、使用私有 IPv4 的 WS URL 即可，不需憑證；跨實體裝置仍需確認防火牆與路由。這些是流程的質性評估，沒有做新手耗時或可用性研究。
+
+優點：單一 daemon 共用多裝置／agent、extension 主動連線、獨立 tokens、穩定 UUID、受限工具與 schema、逾時／斷線不重播異動。代價：需維持 daemon 執行、token 為本機明文設定、agent 共用權限與額度、沒有同一分頁操作鎖；只提供七個分頁／裝置工具，未提供 MCP 書籤／標籤 CRUD 或跨裝置搬移瀏覽器 session。
+
+以下 P1/P2 已加入目前 source，維持本機／LAN WS 與現有認證邊界：
+
+| 優先級 | 實際問題 | 改善與驗收方向 |
+| --- | --- | --- |
+| 已處理 | Server LAN WS URL 與原套件 TLS 規則不相容。 | 依 2026-10-09 使用者決定，更新 BMD endpoint 驗證、兩種語系與文件；本機／RFC1918 LAN WS 不強制 TLS，保留 token 與來源檢查。 |
+| P1 | 分清 token 與配對階段 | 角色引導及秘密占位符樣板、明確 Save and enable、操作旁提示；token 標示執行中／待生效與重啟後更新提醒。 |
+| P1 | 無裝置仍可設定 | 保留 `EXTENSION_NOT_CONNECTED`／`isError` 契約並提供先啟用套件的具體步驟，不改成空陣列。 |
+| P2 | 診斷與退避 | 三段唯讀健康檢查、可操作的網路／token／選用 TLS／LNA 檢查及實際重試倒數；泛用網路錯誤不斷言原因，異動不重送。 |
+
+完整要求、重跑指令及最新驗收見 [sibling extension 整合指南](../../bmd-extension/docs/mcp-integration.md)。新版需先建置本 repository，將 `E2E_MCP_SERVER_DIR` 指向 source checkout 並設定 `E2E_MCP_UX=true`，再從 extension 執行 `pnpm run test:e2e --workers=1 '--reporter=list,html'`。只使用 npm `0.4.0` 則不能啟用新版 UX 情境。Harness 建立獨立 config、隨機 port 與 Chrome profile，最後只清理自己的狀態。
 
 ## Agent 連線
 
@@ -27,7 +79,7 @@ ws://127.0.0.1:38471/
 
 Server 要求 Host 符合 listener 實際 port 與本機／私有介面 IP，path 為 `/`，peer 為本機／RFC1918 位址。Origin 必須符合 `chrome-extension://[a-p]{32}` 並與 hello ID 一致；Origin 不是認證。Production allowlist 為選填，留空接受所有相容 ID；development 不使用固定 allowlist。所有連線仍需正確 token。HTTP／WS 區網資料未加密，適用可信任的區網。
 
-TLS certificate 必須適用於設定的 IP 位址，且 client 裝置必須信任簽發者。只允許可信任的區網 client 通過主機防火牆。Companion extension 必須提供可設定的 server URL，並具備相應的 Chrome 網路權限；本 repository 不包含 extension 端設定，這些瀏覽器條件尚未驗證。
+本機與可信任 LAN 使用 WS 即可，不需 TLS 憑證。更新後的 BMD source build 接受 `127.0.0.1`、`10.0.0.0/8`、`172.16.0.0/12`、`192.168.0.0/16` 的根路徑明文 WS；不接受公開 IP 明文 WS、帳密、query 或 fragment。`localhost`、`::1` 與 LAN DNS 名稱仍不在明文端點範圍，使用管理頁列出的 numeric 私有 IPv4 URL。Server 開啟 LAN、儲存並重啟後，可將 `ws://<server-private-ip>:38471/` 與配對 token 填入套件，測試、儲存並啟用。若選擇 WSS，憑證須涵蓋設定 IP，且 client 裝置信任簽發者；WSS 是選配。防火牆只需開放使用的 LAN port，驗證證據與跨實體裝置限制見上方狀態表。
 
 正式模式只有設定非空的 `BOOKMARKDOWN_EXTENSION_IDS` 時，才要求 ID 精確符合清單。開發模式不要求固定 allowlist，但 ID 仍須符合格式。兩種模式都要求 hello 的 `extensionId` 與 Origin ID 完全相同，並驗證 pairing token。無效的 Host、path、Origin 或正式模式 allowlist ID 會在 WebSocket upgrade 階段回覆 HTTP `403`，不會收到 `hello-ack`；連線數已達上限時回覆 HTTP `503`。
 
@@ -367,7 +419,7 @@ const instanceId = await getOrCreateStableInstanceId();
 const socket = connectExtension(pairingToken, instanceId, browserOperations);
 ```
 
-範例中的 `pairingToken` 由呼叫端安全提供。`getOrCreateStableInstanceId()` 是示意 helper；companion extension 目前會將 instance UUID 持久保存，並在重新連線時沿用。此範例只涵蓋一次連線和 request/response，不包含 extension 實際的重連流程，也不代表該流程已在 Chrome 中驗證。
+範例中的 `pairingToken` 由呼叫端安全提供。`getOrCreateStableInstanceId()` 是示意 helper；companion extension 會將 instance UUID 持久保存，並在重新連線時沿用。此範例只涵蓋一次連線和 request/response；實際 extension 的重連已在上述本機 server/Chrome 重啟情境驗證，未涵蓋長時間閒置與 sleep/wake。
 
 ## 逾時、關閉與限制
 
@@ -375,5 +427,5 @@ hello 預設須在 5 秒內送達；browser request 預設等待 5 秒，可用 
 
 socket 中斷會讓該連線上的 pending request 失敗，instance 在 daemon 的記憶體 registry 中標為 offline；daemon 重啟時 registry 清空。相同 `instanceId` 與 extension ID 再次註冊會取代舊連線，舊 socket 以 close code `4001`、reason `replaced` 關閉；相同 instance ID 搭配不同 extension ID 則遭拒。連線逾時或中斷後，server 不會替 client 重連。
 
-Server 不會替 client 重連。Companion extension 已實作網路錯誤後重新連線，退避間隔最高為 30 秒，並在連線恢復後重新註冊 instance；目前沒有重連／退避專項自動化測試。
-Chrome Local Network Access 與 extension 權限設定仍需在目標 Chrome 版本和 extension 中實際驗證；Node.js 測試不代表瀏覽器互通性已通過。
+Server 不會替 client 重連。更新後的 companion extension 對網路錯誤／hello 逾時使用 1／2／4／8／16／30 秒退避（不加抖動），顯示實際 deadline；停用或認證／協定拒絕會停止，成功註冊後重設。精確序列及清理已由 fake-timer 單元測試驗證，Chrome 測試驗證倒數、重啟與換 token 恢復；不代表長時間 MV3 liveness 或 sleep/wake 已驗證。重連不重播 browser RPC。
+原 manifest/CSP 在已測 Chrome 版本的 loopback 與同機私有網卡 WS 連線不需追加 host grant；其他版本、跨實體電腦 LAN、其他 LNA 位址類別、選配 WSS 與指定產品 host 仍需分別驗證。

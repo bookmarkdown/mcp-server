@@ -12,7 +12,7 @@ export type BridgeErrorCode =
 
 const safeMessages: Record<BridgeErrorCode, string> = {
   BRIDGE_UNAVAILABLE: 'The local WebSocket bridge is unavailable.',
-  EXTENSION_NOT_CONNECTED: 'No authenticated extension instance is available.',
+  EXTENSION_NOT_CONNECTED: 'No matching authenticated extension is available. Start the server, open BMD Settings > MCP, test with the Browser extension pairing token, save and enable the bridge, then wait for Connected and call devices.list again. The Agent Bearer token is separate.',
   UNSUPPORTED_OPERATION: 'The extension does not support the requested browser operation.',
   REQUEST_TIMEOUT: 'The extension did not answer before the request timed out.',
   EXTENSION_DISCONNECTED: 'The extension disconnected before the request completed.',
