@@ -1,5 +1,17 @@
 # @bookmarkdown/mcp-server
 
+## 0.5.0
+
+### Minor Changes
+
+- dd6d9fd: Add read-only tags.search and bookmarks.search tools for saved bookmark tag intersections. AI hosts can discover exact tag keywords and submit AND queries through authenticated extension instances, with bounded metadata and pagination.
+  
+  Keep denied WebSocket upgrades graceful on Windows, with bounded cleanup and explicit shutdown tracking, so clients reliably receive the HTTP denial status.
+
+### Patch Changes
+
+- dd6d9fd: Synchronize English and Traditional Chinese README release status and management-page descriptions with the 0.4.1 release. Add a Traditional Chinese settings guide, update language navigation, and distinguish source integration evidence from published-artifact verification.
+
 ## 0.4.2
 
 ### Patch Changes
