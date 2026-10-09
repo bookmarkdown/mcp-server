@@ -181,6 +181,25 @@ export function createMcpServer(
     },
   );
 
+  server.registerTool(toolCatalog.searchBookmarks.name, {
+    description: toolCatalog.searchBookmarks.description,
+    inputSchema: toolCatalog.searchBookmarks.inputSchema,
+    outputSchema: toolCatalog.searchBookmarks.outputSchema,
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false},
+  }, async (args, context) => {
+    try { return toolSuccess(await executor[toolCatalog.searchBookmarks.name](args, {signal: context.mcpReq.signal})); }
+    catch (error) { return toolError(error); }
+  });
+  server.registerTool(toolCatalog.searchTags.name, {
+    description: toolCatalog.searchTags.description,
+    inputSchema: toolCatalog.searchTags.inputSchema,
+    outputSchema: toolCatalog.searchTags.outputSchema,
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false},
+  }, async (args, context) => {
+    try { return toolSuccess(await executor[toolCatalog.searchTags.name](args, {signal: context.mcpReq.signal})); }
+    catch (error) { return toolError(error); }
+  });
+
   return server;
 }
 
@@ -194,6 +213,8 @@ function isToolExecutor(
 
 export function createBridgeExecutor(bridge: BridgeService): ToolExecutor {
   return {
+    [toolCatalog.searchBookmarks.name]: ({instanceId, ...payload}, {signal}) => bridge.searchBookmarks(instanceId, payload, signal),
+    [toolCatalog.searchTags.name]: ({instanceId, ...payload}, {signal}) => bridge.searchTags(instanceId, payload, signal),
     [toolCatalog.devicesList.name]: (args, { signal }) =>
       bridge.devicesList(args, signal),
     [toolCatalog.countOpenTabs.name]: (args, { signal }) =>

@@ -1,14 +1,21 @@
 ---
 title: Bookmarkdown logo assets
-description: Vector identity combining a bookmark silhouette with BMD lettering and an emphasized central M.
-ms.date: 2026-10-03
+description: Final BMD cutout bookmark logo and historical identity explorations.
+ms.date: 2026-10-09
 ---
 
-## Design
+## Current Logo
+
+The approved logo is the cutout bookmark in [bmd-final](bmd-final/README.md).
+The management header and favicon inline the outline from `bmd-final/bmd-logo.svg`
+in `src/management/page.ts`: black on light backgrounds and white on dark
+backgrounds. The page accent color does not change the logo color.
+
+## Historical Design
 
 The bookmark silhouette represents saved content. The `BMD` monogram references the project's name, with a taller and heavier central `M` emphasizing Markdown. The M is 52 units tall versus 40 for B/D, with approximately 11-unit stems versus 7. The original geometric lowercase wordmark is retained. Rounded geometry matches the local management interface. Lime `#C6EF8D` is the accent; ink `#15251D` and off-white `#EDF2EE` provide the light and dark wordmarks.
 
-## Files
+## Historical Files
 
 * `bookmarkdown-symbol.svg`: standalone icon, transparent background.
 * `bookmarkdown-logo.svg`: horizontal logo for light backgrounds.

@@ -8,6 +8,7 @@ test('exports the explicit browser tool catalog and stable metadata', () => {
       .map(({ name }) => name)
       .sort(),
     [
+      'bookmarks.search',
       'browser.closeTab',
       'browser.countOpenTabs',
       'browser.countOpenWindows',
@@ -15,10 +16,11 @@ test('exports the explicit browser tool catalog and stable metadata', () => {
       'browser.moveTab',
       'browser.openTab',
       'devices.list',
+      'tags.search',
     ],
   );
   assert.deepEqual(
-    Object.values(toolCatalog).map(({ name, description }) => ({
+    Object.values(toolCatalog).filter(({name}) => !['bookmarks.search', 'tags.search'].includes(name)).map(({ name, description }) => ({
       name,
       description,
     })),

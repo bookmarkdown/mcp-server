@@ -27,6 +27,7 @@ export class WebSocketBridgeServer {
   readonly #webSocketServer: WebSocketServer;
   readonly #extensionIds: Set<string>;
   #boundPort: number | undefined;
+  readonly #rejectedUpgrades = new Set<Duplex>();
 
   public constructor(
     private readonly config: BridgeConfig,
@@ -122,6 +123,8 @@ export class WebSocketBridgeServer {
       return;
     }
 
+    for (const rejected of this.#rejectedUpgrades) rejected.destroy();
+
     for (const client of this.#webSocketServer.clients) {
       client.terminate();
     }
@@ -155,11 +158,19 @@ export class WebSocketBridgeServer {
     status: 403 | 503,
     reason: string,
   ): void {
-    // Rejected upgrades are not tracked by WebSocketServer. Close their socket
-    // after the HTTP reply is flushed, matching ws's own abort-handshake path.
+    // Windows may turn an immediate destroy after finish into a reset before
+    // the peer receives the denial. Wait for peer closure, with bounded cleanup and
+    // explicit shutdown tracking because WebSocketServer does not own these.
+    this.#rejectedUpgrades.add(socket);
+    const timeout = setTimeout(() => socket.destroy(), 1000);
+    timeout.unref();
+    socket.once('close', () => {
+      clearTimeout(timeout);
+      this.#rejectedUpgrades.delete(socket);
+    });
     socket.once('error', () => socket.destroy());
-    socket.once('finish', () => socket.destroy());
-    socket.end(
+    socket.resume();
+    socket.write(
       `HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`,
     );
   }

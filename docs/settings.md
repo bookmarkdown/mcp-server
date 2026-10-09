@@ -5,6 +5,8 @@ ms.date: 2026-10-09
 ms.topic: how-to
 ---
 
+[English](settings.md) | [繁體中文](settings.zh-TW.md)
+
 ## First launch
 
 Build the source checkout and run `npm start`, or run `bookmarkdown-mcp-server` after installing a release containing this feature. No environment variables are required. The CLI creates a versioned JSON configuration with two independent 256-bit random tokens before opening listeners. Subsequent launches read the same file. Invalid, oversized, unknown-version, or unreadable files fail startup without replacing them.
@@ -13,14 +15,14 @@ Open the local settings URL printed in the terminal, normally `http://127.0.0.1:
 
 The supported client contract is BookMarkdown/BMD Chrome extension protocol `2`, app ID `bmd-extension`. A client must implement this contract and authenticate; accepting any compatible extension ID does not mean arbitrary browser extensions work. Connected instances are discovered through successful pairing. The list is process-local and includes previously connected instances while this daemon remains running. The page never queries tab contents or performs tab mutations. An explicit read-only connection check can request the selected device's tab count.
 
-For local BMD setup, copy the browser-extension card's WebSocket URL and pairing token into Options → Settings → MCP. Test, then choose Save and enable in the updated extension; separate Save and enable controls remain available. The verify/save/register steps distinguish a successful probe from saved settings and a registered device. Use the agent card's separate MCP token only in the host's Authorization header. Templates use token placeholders and copy actions require an explicit click. Released server `0.4.0` is the historical WS baseline; guided management UX and health checks require this updated source build and are unreleased. See [integration evidence](browser-integration.md).
+For local BMD setup, copy the browser-extension card's WebSocket URL and pairing token into Options → Settings → MCP. Test, then choose Save and enable in the updated extension; separate Save and enable controls remain available. The verify/save/register steps distinguish a successful probe from saved settings and a registered device. Use the agent card's separate MCP token only in the host's Authorization header. Templates use token placeholders and copy actions require an explicit click. Released server `0.4.0` is the historical WS baseline; guided management UX and health checks are included in `0.4.1`. Use a compatible updated extension. See [integration evidence (Traditional Chinese)](browser-integration.md).
 
 ## One-click extension pairing
 
 The updated source adds **Connect Chrome extension** (`連接 Chrome 套件`) and
-**Copy pairing link** (`複製配對連結`) to the Browser extension card. This new
-handoff is not yet released. Update/rebuild both repositories and restart the
-daemon/reload the extension before using it.
+**Copy pairing link** (`複製配對連結`) to the Browser extension card. This
+handoff is included in server `0.4.1`. Update the daemon and use a compatible
+extension build; restart the daemon/reload the extension before using it.
 
 1. Confirm the target Chrome extension ID. The initial value is
    `kdnjdggdbibdliholcdkmdkajacdmnhd`, supplied by the user; it does not establish

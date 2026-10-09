@@ -4,6 +4,8 @@ import { ConnectionManager, type InstanceSnapshot } from './connection-manager.j
 import { BridgeError } from './errors.js';
 import { RequestRouter } from './request-router.js';
 import {
+  SEARCH_BOOKMARKS_OPERATION,
+  SEARCH_TAGS_OPERATION,
   CLOSE_TAB_OPERATION,
   COUNT_OPEN_TABS_OPERATION,
   COUNT_OPEN_WINDOWS_OPERATION,
@@ -141,6 +143,35 @@ export class BridgeService {
   }
 
   public get instances(): InstanceSnapshot[] { return this.#connections.listInstances(); }
+
+  public async searchBookmarks(instanceId: string,
+    payload: BrowserOperationPayload<typeof SEARCH_BOOKMARKS_OPERATION>, signal?: AbortSignal,
+  ): Promise<BrowserOperationResult<typeof SEARCH_BOOKMARKS_OPERATION>> {
+    const result = await this.#requestBrowserOperation(instanceId, SEARCH_BOOKMARKS_OPERATION, payload, signal);
+    this.#validateSearchPage(payload, result.bookmarks.length, result);
+    return result;
+  }
+
+  public async searchTags(instanceId: string,
+    payload: BrowserOperationPayload<typeof SEARCH_TAGS_OPERATION>, signal?: AbortSignal,
+  ): Promise<BrowserOperationResult<typeof SEARCH_TAGS_OPERATION>> {
+    const result = await this.#requestBrowserOperation(instanceId, SEARCH_TAGS_OPERATION, payload, signal);
+    this.#validateSearchPage(payload, result.tags.length, result);
+    return result;
+  }
+
+  #validateSearchPage(payload: {limit: number; offset: number}, length: number,
+    result: {totalCount: number; nextOffset: number | null},
+  ): void {
+    const end = payload.offset + length;
+    const remaining = payload.offset < result.totalCount;
+    if (length > payload.limit || !Number.isSafeInteger(end)
+      || (remaining && (length === 0 || end > result.totalCount))
+      || (!remaining && length !== 0)
+      || result.nextOffset !== (end < result.totalCount ? end : null)) {
+      throw new BridgeError('INVALID_EXTENSION_RESPONSE');
+    }
+  }
 
   public async countOpenTabs(
     instanceId: string,

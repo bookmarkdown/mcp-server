@@ -1,5 +1,9 @@
 import * as z from 'zod/v4';
 import {
+  searchBookmarksPayloadSchema,
+  searchBookmarksResultSchema,
+  searchTagsPayloadSchema,
+  searchTagsResultSchema,
   browserOpenTabUrlSchema,
   browserSafeIntegerSchema,
   closeTabResultSchema,
@@ -122,7 +126,22 @@ export const moveTabTool = {
   outputSchema: moveTabResultSchema,
 } as const;
 
+export const searchBookmarksTool = {
+  name: 'bookmarks.search',
+  description: 'Search saved bookmarks in one extension instance. Extract actual tag names from the user request into keywords, or discover tag IDs with tags.search. Every keyword and tag ID is required (AND). Keywords match exact names including ancestors, ignoring case and width; selected IDs include descendants and distinguish same-named folders. No synonym expansion. Optional search matches title or URL. Returns bounded metadata with totalCount and nextOffset; truncated marks shortened fields. Follow nextOffset to retrieve more results.',
+  inputSchema: searchBookmarksPayloadSchema.extend({instanceId: z.string().uuid()}).strict(),
+  outputSchema: searchBookmarksResultSchema,
+} as const;
+export const searchTagsTool = {
+  name: 'tags.search',
+  description: 'Discover saved tag keywords and IDs in one extension instance before interpreting a natural-language bookmark request. Query is a case- and width-insensitive substring of the full ancestor path; empty query browses tags. Use the returned exact names or IDs in bookmarks.search. No synonym expansion. Returns at most 10 tags per page with totalCount and nextOffset. IDs remain usable when truncated marks a shortened name or path.',
+  inputSchema: searchTagsPayloadSchema.extend({instanceId: z.string().uuid()}).strict(),
+  outputSchema: searchTagsResultSchema,
+} as const;
+
 export const toolCatalog = {
+  searchBookmarks: searchBookmarksTool,
+  searchTags: searchTagsTool,
   devicesList: devicesListTool,
   countOpenTabs: countOpenTabsTool,
   countOpenWindows: countOpenWindowsTool,

@@ -1,6 +1,6 @@
 ---
 title: "Available Features"
-description: "BookMarkdown MCP daemon、Streamable HTTP、browser window/tab 工具與目前整合狀態。"
+description: "BookMarkdown MCP daemon、Streamable HTTP、browser window/tab 與書籤／標籤查詢工具及整合狀態。"
 ms.date: 2026-10-09
 ms.topic: reference
 ---
@@ -35,6 +35,18 @@ Agent 共用認證 token、browser instances 與工具權限。沒有每個 agen
 
 `browser.openTab`、`browser.closeTab` 與 `browser.moveTab` 會改變瀏覽器狀態。逾時或連線中斷時，結果可能不明，server 不會自動重送。所有 browser tools 都要求目標 instance 在 hello capabilities 中宣告相應 operation。
 
+### 書籤與標籤唯讀查詢
+
+更新後的 source build 新增 `tags.search` 與 `bookmarks.search`，需搭配宣告這兩個 capabilities 的 companion extension。npm `0.4.0` 沒有這兩個工具。
+
+* `tags.search` 接受 UUID `instanceId`、`query`（最多 256 字元，預設空字串）、`limit`（1–10，預設 10）與 `offset`（預設 0）。以不區分大小寫／全半形的子字串搜尋完整祖先路徑，回傳標籤 ID、name、path、parentId、directBookmarkCount 及 truncated。
+* `bookmarks.search` 接受 UUID `instanceId`、`keywords`、`tagIds`、`search`、`limit` 與 `offset`。每個關鍵詞與選定 ID 都必須符合（AND）；關鍵詞比對完整名稱與祖先，ID 包含子樹。不同資料夾的同名標籤以 ID 區分；已刪除 ID 回傳零筆。`search` 額外比對標題／URL，最多 1024 字元。keywords／tagIds 各最多 50 個，關鍵詞每個最多 256 字元。
+* AI host 先從自然語言取得實際標籤關鍵詞，可用 `tags.search` 探索名稱／ID，再呼叫 `bookmarks.search`，例如 `{"instanceId":"<UUID>","keywords":["React","拖曳"]}`。Extension 執行確定的資料庫查詢，沒有內建 AI，也不展開同義詞。
+* 兩個工具每頁最多 10 筆，結果包含 totalCount、nextOffset 與 queriedAt。書籤 metadata 包含 id、title、url、description 與最多 10 個標籤；文字和整頁有大小上限，truncated 表示縮短文字或省略標籤。沿 nextOffset 分頁，不要假設每頁一定滿 10 筆；名稱／路徑截短時使用 ID 查詢。
+* 工具標示 readOnlyHint；沿用 token、Origin、instance capabilities、request ID、逾時與取消契約。沒有新增書籤／標籤寫入、SQL 或頁面內容工具，也不記錄查詢或書籤 payload。
+
+工具 schema、SDK MCP 呼叫、認證 WebSocket 路由與完整 server 建置／型別／daemon 測試已驗證。Companion extension 的 Chrome 驗收使用正式 daemon 的 HTTP MCP，涵蓋標籤探索、關鍵詞及 ID 交集、標題篩選、分頁、改名同步、非法參數與停用後拒絕查詢。這不是特定產品 host 的相容性認證。
+
 ### `devices.list` 結果
 
 每個 instance 包含 `appId`、`instanceId`、`extensionId`、`browser`、`status`、`lastSeen`、回報的 operation capabilities 與 `displayName`。使用者可在 extension 設定頁自訂 1 至 32 個中英文或數字組成的別名，詞語間可用空格或連字號；也可重新產生三個不同動物詞 alias。同一 daemon 中如有其他 instance 使用相同名稱，server 會加上 `-2`、`-3` 等數字後綴，並在註冊 ack 回傳最後分配的名稱。AI 可從 `devices.list` 將 `displayName` 對應到同一項目的 `instanceId`；執行 browser tools 時仍需使用 UUID `instanceId`。
@@ -51,7 +63,7 @@ daemon 預設在 `127.0.0.1:38471` 接受 WebSocket，MCP 在 `127.0.0.1:38472/m
 
 HTTP 缺少或不正確的 Bearer token 回 `401`，非法 Host/Origin 回 `403`，body 超限回 `413`，同時處理中的 HTTP 請求超限回 `503`。工具錯誤包含 `EXTENSION_NOT_CONNECTED`、`UNSUPPORTED_OPERATION`、`REQUEST_TIMEOUT`、`REQUEST_CANCELLED`、`EXTENSION_DISCONNECTED`、`EXTENSION_OPERATION_FAILED`、`BRIDGE_BUSY` 與 `INVALID_EXTENSION_RESPONSE`。取消或斷線不會自動重送瀏覽器操作。
 
-WebSocket hello 使用 protocol version `2`。一般註冊要求 app ID `bmd-extension`、browser `chrome`、UUID instance ID、合法裝置別名及與 Origin 相符的 extension ID；正式模式若設定非空 allowlist，ID 必須符合清單。Probe 可省略別名且不會註冊 instance。Browser RPC 僅接受 `browser.countOpenTabs`、`browser.countOpenWindows`、`browser.listTabs`、`browser.openTab`、`browser.closeTab` 與 `browser.moveTab`，並在呼叫前檢查 instance capabilities。request ID 用於將回覆配對到原始連線及呼叫。
+WebSocket hello 使用 protocol version `2`。一般註冊要求 app ID `bmd-extension`、browser `chrome`、UUID instance ID、合法裝置別名及與 Origin 相符的 extension ID；正式模式若設定非空 allowlist，ID 必須符合清單。Probe 可省略別名且不會註冊 instance。Browser RPC 接受上述兩個唯讀查詢，以及 `browser.countOpenTabs`、`browser.countOpenWindows`、`browser.listTabs`、`browser.openTab`、`browser.closeTab` 與 `browser.moveTab`，並在呼叫前檢查 instance capabilities。request ID 用於將回覆配對到原始連線及呼叫。
 
 ## 驗證狀態與後續工作
 
@@ -59,8 +71,8 @@ WebSocket hello 使用 protocol version `2`。一般註冊要求 app ID `bmd-ext
 
 更新後的 companion extension 對網路錯誤／hello 逾時使用 1／2／4／8／16／30 秒退避並显示下一次倒數；精確序列、停用清理及拒絕認證後停止已由單元測試驗證。重連不重送 browser RPC。長時間 MV3 閒置及 sleep/wake 尚未驗證。
 
-目前 source 新增角色化配對引導、秘密占位符樣板、操作旁提示、執行中／待重啟 token 狀態、重啟後客戶端更新提醒與三段唯讀健康檢查。這些管理頁功能尚未發布，不屬於 npm `0.4.0` 的既有驗證。`EXTENSION_NOT_CONNECTED`／`isError` 契約維持不變，訊息新增先啟用套件的步驟。健康檢查不增加七個工具之外的 MCP 工具，詳見[設定指南](settings.md)。
+Server `0.4.1` 已包含角色化配對引導、秘密占位符樣板、操作旁提示、執行中／待重啟 token 狀態、重啟後客戶端更新提醒與三段唯讀健康檢查。這些功能不屬於 npm `0.4.0` 的歷史驗證範圍。`EXTENSION_NOT_CONNECTED`／`isError` 契約維持不變，訊息提供先啟用套件的步驟。健康檢查不增加七個工具之外的 MCP 工具，詳見[設定指南](settings.zh-TW.md)。
 
-目前 source 另新增「連接 Chrome 套件」與「複製配對連結」，可選擇執行中的本機／LAN WS 端點，帶入套件的未儲存草稿並提示測試，再由使用者儲存並啟用。目標 ID 預填為使用者指定值，可改為開發版實際 ID；不修改 allowlist，也不新增 MCP 工具。這項配對連結功能尚未發布，需更新兩端，詳見[一鍵配對](settings.md#one-click-extension-pairing)。
+Server `0.4.1` 也已包含「連接 Chrome 套件」與「複製配對連結」，可選擇執行中的本機／LAN WS 端點，帶入套件的未儲存草稿並提示測試，再由使用者儲存並啟用。目標 ID 預填為使用者指定值，可改為開發版實際 ID；不修改 allowlist，也不新增 MCP 工具。需搭配相容的新版套件，詳見[一鍵配對](settings.zh-TW.md#一鍵套件配對)。
 
 設定範圍與本機啟動步驟，請參閱[專案 README](../README.md)。

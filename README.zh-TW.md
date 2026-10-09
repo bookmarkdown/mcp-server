@@ -7,9 +7,9 @@ BookMarkdown MCP Server 讓 agent 直接透過 MCP Streamable HTTP 呼叫本機 
 > [!IMPORTANT]
 > MCP host 必須使用 Streamable HTTP；舊的 stdio proxy 已移除。Server `0.4.0` 與 BMD `0.0.1` source build 已在 Windows、Chrome 153 通過 loopback 與同機私有網卡 WS 整合測試，使用自訂 HTTP JSON-RPC 測試 host。指定 MCP 產品與遠端 WSS 尚未驗證，詳見[整合證據](docs/browser-integration.md)。
 
-目前 source 新增配對引導、執行中／待生效 token、重啟後更新客戶端提醒與三段唯讀連線檢查。這些管理頁功能尚未發布，需建置並啟動更新後 source；本機／私有 LAN 仍可使用 WS，不需憑證。
+Server `0.4.1` 已包含配對引導、執行中／待生效 token、重啟後更新客戶端提醒與三段唯讀連線檢查。本機／私有 LAN 可使用 WS，不需憑證；相關功能需搭配相容的新版套件。歷史 `0.4.0` 整合證據不代表所有後續版本都已完成相同驗證。
 
-最新 source 另支援一鍵配對：確認套件 ID 與執行中 WS 端點，開啟套件帶入草稿、測試，再明確儲存並啟用；也可複製配對連結貼到另一台 LAN 電腦的 Chrome 網址列。此流程需更新兩端，詳見[一鍵配對設定](docs/settings.md#one-click-extension-pairing)。
+Server `0.4.1` 也已包含一鍵配對：確認套件 ID 與執行中 WS 端點，開啟套件帶入草稿、測試，再明確儲存並啟用；也可複製配對連結貼到另一台 LAN 電腦的 Chrome 網址列。此流程需搭配相容的新版套件，詳見[一鍵配對設定](docs/settings.zh-TW.md#一鍵套件配對)。
 
 ## 功能
 
@@ -70,15 +70,15 @@ npm start
 
 全域安裝使用 `bookmarkdown-mcp-server`。不需預先設定 ENV 或 extension ID；首次啟動會建立使用者設定檔，以及各自獨立的 MCP 與配對 token，之後沿用。
 
-開啟終端機提示的本機管理頁（預設 `http://127.0.0.1:38472/`）。頁面以兩行大字顯示 **bookmarkdown**／**mcp-server**，提供 URL、遮蔽的 token 顯示／複製、支援套件與已配對裝置清單，以及伺服器設定。設定保存與 token 重建需重啟後生效。
+開啟終端機提示的本機管理頁（預設 `http://127.0.0.1:38472/`）。頁面以緊湊的 **BookMarkdown MCP** 標題列顯示 BMD logo 與即時狀態，提供連線 URL、遮蔽的 token 顯示／複製、已配對裝置清單，以及伺服器設定。設定保存與 token 重建需重啟後生效。
 
-套件使用 WS 與配對 token；Agent 使用 HTTP 與獨立 Bearer token。新版 BMD 先「測試」，再「儲存並啟用」，probe 成功不代表已註冊。管理頁明確點選後驗證 HTTP initialize／工具目錄、裝置註冊及唯讀分頁計數；token 顯示／複製在重啟前仍取執行中憑證。提醒保存範圍與限制見[設定指南](docs/settings.md)。
+套件使用 WS 與配對 token；Agent 使用 HTTP 與獨立 Bearer token。新版 BMD 先「測試」，再「儲存並啟用」，probe 成功不代表已註冊。管理頁明確點選後驗證 HTTP initialize／工具目錄、裝置註冊及唯讀分頁計數；token 顯示／複製在重啟前仍取執行中憑證。提醒保存範圍與限制見[設定指南](docs/settings.zh-TW.md)。
 
 瀏覽器請開啟根路徑 `/`；`/mcp` 是 agent 的認證端點，`38471` 是套件 WebSocket port。管理頁須在啟動 server 的電腦開啟。修改或重新建置後，先停止舊程序，再執行 `npm start`。
 
-Windows 設定存於 `%LOCALAPPDATA%\BookMarkdown\mcp-server\config.json`；Linux 與 macOS 使用各自的使用者設定目錄。ENV 可覆寫設定，`BOOKMARKDOWN_CONFIG_FILE` 可指定檔案。詳細路徑、欄位、ENV 與重啟流程見[設定指南](docs/settings.md)。
+Windows 設定存於 `%LOCALAPPDATA%\BookMarkdown\mcp-server\config.json`；Linux 與 macOS 使用各自的使用者設定目錄。ENV 可覆寫設定，`BOOKMARKDOWN_CONFIG_FILE` 可指定檔案。詳細路徑、欄位、ENV 與重啟流程見[設定指南](docs/settings.zh-TW.md)。
 
-預設只接受本機連線。在網頁開啟區網、儲存並重啟後，可信任 LAN 的 agent 使用顯示的私有 IP HTTP URL，BMD 使用 `ws://<server-private-ip>:38471/` 與獨立配對 token。更新後的 BMD source build 已接受 RFC1918 IPv4 WS，不需憑證；WSS 為選配，管理頁仍僅限本機。須載入更新後的套件建置，詳見[設定指南](docs/settings.md)。
+預設只接受本機連線。在網頁開啟區網、儲存並重啟後，可信任 LAN 的 agent 使用顯示的私有 IP HTTP URL，BMD 使用 `ws://<server-private-ip>:38471/` 與獨立配對 token。更新後的 BMD source build 已接受 RFC1918 IPv4 WS，不需憑證；WSS 為選配，管理頁仍僅限本機。須載入更新後的套件建置，詳見[設定指南](docs/settings.zh-TW.md)。
 
 保持終端機執行，按 Ctrl+C 停止。Token 不會寫入 log，請勿放入 HTTP／WS 傳輸 URL、命令列參數或 source control。一鍵配對連結是使用者明確操作的例外，僅在套件 URL fragment 帶入配對 token；請只交給要配對的瀏覽器。
 
@@ -112,7 +112,7 @@ Bridge 另以相同設定限制等待中的 browser RPC，超限時工具回 `BR
 
 ## 安全與隱私
 
-預設 HTTP／WS 綁定 loopback。開啟區網後接受本機或 RFC1918 client，並保留兩組 token、Host／Origin、hello 身分與能力檢查。正式模式的 extension ID allowlist 改為選填；開發模式接受所有相容 ID。管理頁及 token 端點只允許本機使用，另檢查同源請求與 CSRF。HTTP／WS 區網資料未加密；WSS 可透過既有 ENV 選配。設定檔含明文 token，請保護使用者目錄。詳見[設定指南](docs/settings.md)與[瀏覽器整合指南](docs/browser-integration.md)。
+預設 HTTP／WS 綁定 loopback。開啟區網後接受本機或 RFC1918 client，並保留兩組 token、Host／Origin、hello 身分與能力檢查。正式模式的 extension ID allowlist 改為選填；開發模式接受所有相容 ID。管理頁及 token 端點只允許本機使用，另檢查同源請求與 CSRF。HTTP／WS 區網資料未加密；WSS 可透過既有 ENV 選配。設定檔含明文 token，請保護使用者目錄。詳見[設定指南](docs/settings.zh-TW.md)與[瀏覽器整合指南](docs/browser-integration.md)。
 
 ## 開發
 
