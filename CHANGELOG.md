@@ -1,5 +1,12 @@
 # @bookmarkdown/mcp-server
 
+## 0.4.0
+
+### Minor Changes
+
+- acf3879: Create persistent per-user settings and random tokens on first CLI launch, expose a local settings and device-status page, and support optional multi-device LAN HTTP/WS without requiring TLS or preconfigured extension IDs.
+- acf3879: Replace the stdio proxy and local IPC with a loopback MCP Streamable HTTP daemon endpoint. Agents connect directly to /mcp using BOOKMARKDOWN_MCP_TOKEN bearer authentication. Remove the proxy subcommand and BOOKMARKDOWN_IPC_PIPE_NAME; retain the extension WebSocket contract and browser tools. Update migration instructions and package smoke verification.
+
 ## 0.3.0
 
 ### Minor Changes
