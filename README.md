@@ -5,7 +5,7 @@
 BookMarkdown MCP Server lets agents call a local daemon directly through MCP Streamable HTTP. The daemon retains the browser extension WebSocket bridge; the stdio proxy and local IPC have been removed.
 
 > [!IMPORTANT]
-> This HTTP mode is not yet published; build from source to use it. Real Chrome, extension, and specific MCP host compatibility remain unverified.
+> MCP hosts must use Streamable HTTP; the former stdio proxy is no longer available. Real Chrome, extension, and specific MCP host compatibility remain unverified.
 
 ## Features
 
@@ -27,7 +27,7 @@ See [Features and limitations (Traditional Chinese)](docs/features.md), [Archite
 
 ## Requirements
 
-* Windows, Linux, or macOS (macOS requires the release containing this change; `0.2.1` and earlier do not support macOS)
+* Windows, Linux, or macOS
 * Node.js 22.23.3 or later
 * npm
 * A compatible companion browser extension (maintained separately)

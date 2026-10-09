@@ -5,7 +5,7 @@
 BookMarkdown MCP Server 讓 agent 直接透過 MCP Streamable HTTP 呼叫本機 daemon。Daemon 保留 browser extension WebSocket bridge；stdio proxy 與本機 IPC 已移除。
 
 > [!IMPORTANT]
-> 此 HTTP 模式尚未發布，請從原始碼建置。真實 Chrome、extension 與指定 MCP host 的相容性仍未驗證。
+> MCP host 必須使用 Streamable HTTP；舊的 stdio proxy 已移除。真實 Chrome、extension 與指定 MCP host 的相容性仍未驗證。
 
 ## 功能
 
@@ -27,7 +27,7 @@ Server 提供以下 MCP tools：
 
 ## 需求
 
-* Windows、Linux 或 macOS（macOS 需使用包含此變更的新版；`0.2.1` 與更早版本不支援 macOS）
+* Windows、Linux 或 macOS
 * Node.js 22.23.3 或更新版本
 * npm
 * 相容的 companion browser extension，另行維護
