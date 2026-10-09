@@ -2,9 +2,8 @@
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { startDaemon } from './daemon/service.js';
-import { startProxyService } from './proxy/service.js';
-import { getLocalPipePath } from './ipc/transport.js';
 import type { RuntimeMode } from './config.js';
+import { SettingsStore } from './settings.js';
 
 export async function runCli(
   runtimeMode: RuntimeMode = 'production',
@@ -13,33 +12,24 @@ export async function runCli(
     const [requestedMode, ...extraArguments] = process.argv.slice(2);
     const mode = requestedMode ?? 'daemon';
     if (
-      (mode !== 'daemon' && mode !== 'proxy') ||
+      mode !== 'daemon' ||
       extraArguments.length > 0
     ) {
       throw new Error(
-        'Usage: bookmarkdown-mcp-server [daemon|proxy] (defaults to daemon).',
+        'Usage: bookmarkdown-mcp-server [daemon] (defaults to daemon).',
       );
     }
 
-    if (mode === 'daemon') {
-      const result = await startDaemon({
-        runtimeMode,
-        pipeName: process.env.BOOKMARKDOWN_IPC_PIPE_NAME,
-        onLog: (message) => console.error(message),
-      });
-      if (result.status === 'already_running') {
-        console.error('BookMarkdown daemon is already running.');
-        return;
-      }
-
-      console.error(
-        `BookMarkdown daemon listening on ${result.daemon.webSocketUrl} and local IPC ${getLocalPipePath(result.daemon.pipeName)}.`,
-      );
-      return;
-    }
-
-    startProxyService({ pipeName: process.env.BOOKMARKDOWN_IPC_PIPE_NAME });
-    console.error('BookMarkdown MCP stdio proxy started. Start the daemon separately and connect BMD > Settings > MCP before using browser tools.');
+    const settings = await SettingsStore.load();
+    const result = await startDaemon({
+      env: settings.effectiveEnv(), settings,
+      runtimeMode,
+      onLog: (message) => console.error(message),
+    });
+    console.error(
+      `BookMarkdown daemon listening on ${result.daemon.mcpUrl} and ${result.daemon.webSocketUrl}.\n` +
+      `Open the settings page in your browser: ${new URL('/', result.daemon.mcpUrl).href}`,
+    );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown startup error.';
     console.error(`BookMarkdown MCP server failed to start: ${message}`);

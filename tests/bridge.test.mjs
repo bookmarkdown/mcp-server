@@ -1,16 +1,14 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { createServer as createNetServer } from 'node:net';
 import { networkInterfaces, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { WebSocket } from 'ws';
-import { IpcClient } from '../dist/ipc/client.js';
+import { HttpTestClient } from './helpers/http-client.mjs';
 import { startDaemon } from '../dist/daemon/service.js';
-import { connectLocalPipe } from '../dist/ipc/transport.js';
 
 const extensionId = 'a'.repeat(32);
 const secondExtensionId = 'b'.repeat(32);
@@ -20,17 +18,15 @@ const instanceId = '7d8c2f92-12c8-4bd2-9701-12e602deaf01';
 const secondInstanceId = '9f35a930-b515-47e3-8bb5-c454f8de8c55';
 const supportedPlatforms = {
   skip: !['win32', 'linux', 'darwin'].includes(process.platform)
-    ? 'Daemon bridge tests require Windows, Linux, or macOS local IPC.'
+    ? 'Daemon bridge tests require Windows, Linux, or macOS.'
     : false,
 };
-
-function uniquePipeName() {
-  return `bookmarkdown-bridge-${process.pid}-${randomUUID()}`;
-}
 
 function makeEnvironment(port, overrides = {}) {
   const environment = {
     BOOKMARKDOWN_BRIDGE_TOKEN: token,
+    BOOKMARKDOWN_MCP_TOKEN: token,
+    BOOKMARKDOWN_MCP_PORT: '38472',
     BOOKMARKDOWN_EXTENSION_IDS: `${extensionId},${secondExtensionId}`,
     BOOKMARKDOWN_WS_PORT: String(port),
     BOOKMARKDOWN_MAX_PAYLOAD_BYTES: '65536',
@@ -62,35 +58,29 @@ function makeEnvironment(port, overrides = {}) {
 
 async function startDaemonForTest(t, overrides = {}, options = {}) {
   const port = await reservePort();
-  const pipeName = uniquePipeName();
   const env = makeEnvironment(port, overrides);
+  env.BOOKMARKDOWN_MCP_PORT = String(await reservePort());
   if (options.omitExtensionIds) {
     delete env.BOOKMARKDOWN_EXTENSION_IDS;
   }
   const daemonResult = await startDaemon({
     env,
     runtimeMode: options.runtimeMode,
-    pipeName,
     signalTarget: new EventEmitter(),
     onLog: options.onLog,
+    shutdownDrainMs: options.shutdownDrainMs,
   });
   assert.equal(daemonResult.status, 'started');
   if (daemonResult.status !== 'started') {
     throw new Error('Expected a newly started daemon.');
   }
 
-  const client = new IpcClient({
-    pipeName,
-    connectionAttempts: 1,
-    reconnectDelayMs: 0,
-    handshakeTimeoutMs: 1000,
-    requestTimeoutMs: 2000,
-  });
+  const client = new HttpTestClient(daemonResult.daemon.mcpUrl, token);
   t.after(async () => {
     client.close();
     await daemonResult.daemon.close();
   });
-  return { client, daemon: daemonResult.daemon, pipeName, port };
+  return { client, daemon: daemonResult.daemon, port };
 }
 
 async function reservePort(host = '127.0.0.1') {
@@ -104,7 +94,7 @@ async function reservePort(host = '127.0.0.1') {
   await new Promise((resolve, reject) => {
     server.close((error) => (error ? reject(error) : resolve()));
   });
-  return address.port;
+  return address.port > 10080 ? address.port : reservePort(host);
 }
 
 function privateIpv4Address() {
@@ -295,42 +285,37 @@ test('fails daemon startup when the configured WebSocket port is occupied', supp
   });
   const address = occupied.address();
   assert.ok(address && typeof address !== 'string');
-  const pipeName = uniquePipeName();
 
   try {
     await assert.rejects(
       startDaemon({
         env: makeEnvironment(address.port),
-        pipeName,
-        signalTarget: new EventEmitter(),
+            signalTarget: new EventEmitter(),
       }),
       /EADDRINUSE|already in use/i,
     );
-    await assert.rejects(connectLocalPipe(pipeName));
     assert.equal(occupied.listening, true);
   } finally {
     await new Promise((resolve) => occupied.close(resolve));
   }
 });
 
-test('rejects wildcard and unencrypted LAN WebSocket bindings', supportedPlatforms, async () => {
+test('rejects wildcard without LAN opt-in and public WebSocket bindings', supportedPlatforms, async () => {
   const port = await reservePort();
   const signalTarget = new EventEmitter();
   await assert.rejects(
     startDaemon({
       env: makeEnvironment(port, { host: '0.0.0.0' }),
-      pipeName: uniquePipeName(),
       signalTarget,
     }),
-    /BOOKMARKDOWN_WS_HOST must be 127\.0\.0\.1 or a private RFC1918 IPv4 address/,
+    /BOOKMARKDOWN_WS_HOST must be/,
   );
   await assert.rejects(
     startDaemon({
-      env: makeEnvironment(port, { host: '192.168.1.10' }),
-      pipeName: uniquePipeName(),
+      env: makeEnvironment(port, { host: '8.8.8.8' }),
       signalTarget,
     }),
-    /LAN WebSocket bindings require a TLS certificate and private key/,
+    /BOOKMARKDOWN_WS_HOST must be/,
   );
 });
 
@@ -369,7 +354,6 @@ test('serves an authenticated WSS bridge on a private LAN address', {
   });
   const result = await startDaemon({
     env,
-    pipeName: uniquePipeName(),
     signalTarget: new EventEmitter(),
   });
   assert.equal(result.status, 'started');
@@ -907,4 +891,33 @@ test('rejects oversized WebSocket frames', supportedPlatforms, async (t) => {
   });
   extension.socket.send('x'.repeat(5000));
   assert.equal(await closed, 1009);
+});
+
+test('drains an in-flight HTTP browser call before closing both listeners', async t => {
+  const bridge = await startDaemonForTest(t, {}, { shutdownDrainMs: 1000 });
+  const extension = await connectExtension(bridge, { instanceId });
+  const framePromise = nextMessage(extension.socket);
+  const call = bridge.client.call('browser.countOpenTabs', { instanceId });
+  const frame = JSON.parse(await framePromise);
+  const closing = bridge.daemon.close();
+  assert.equal(bridge.daemon.status, 'shutting_down');
+  extension.socket.send(countResponse(frame.requestId, 4));
+  assert.equal((await call).count, 4);
+  await closing;
+  assert.equal(bridge.daemon.status, 'closed');
+  assert.equal(bridge.daemon.pendingRequestCount, 0);
+});
+
+test('aborts a stalled HTTP browser call when the shutdown drain expires', async t => {
+  const bridge = await startDaemonForTest(t, {}, { shutdownDrainMs: 20 });
+  const extension = await connectExtension(bridge, { instanceId });
+  const framePromise = nextMessage(extension.socket);
+  const call = bridge.client.call('browser.countOpenTabs', { instanceId });
+  const rejected = assert.rejects(call);
+  await framePromise;
+  const started = Date.now();
+  await bridge.daemon.close();
+  assert.ok(Date.now() - started < 2000, 'Shutdown exceeded its drain bound.');
+  await rejected;
+  assert.equal(bridge.daemon.status, 'closed');
 });

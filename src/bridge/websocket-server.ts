@@ -13,6 +13,7 @@ import {
 import type { Duplex } from 'node:stream';
 import { WebSocket, WebSocketServer } from 'ws';
 import type { BridgeConfig } from '../config.js';
+import { allowedHosts, allowedPeer } from '../network.js';
 import { ConnectionManager } from './connection-manager.js';
 import {
   APP_ID,
@@ -39,8 +40,8 @@ export class WebSocketBridgeServer {
       perMessageDeflate: false,
     });
     const requestHandler = (_request: IncomingMessage, response: ServerResponse) => {
-      response.writeHead(404, { connection: 'close' });
-      response.end();
+      response.writeHead(404, { connection: 'close', 'Content-Type': 'text/plain; charset=utf-8' });
+      response.end('這個 port 提供套件 WebSocket 連線。\n請使用終端機列出的本機設定頁網址開啟管理介面（預設 http://127.0.0.1:38472/）。\n');
     };
     const tlsOptions = config.tlsCertFile && config.tlsKeyFile
       ? {
@@ -55,10 +56,10 @@ export class WebSocketBridgeServer {
 
     this.#httpServer.on('upgrade', (request, socket, head) => {
       const extensionId = this.#extensionIdFromOrigin(request.headers.origin);
-      const expectedHost = `${this.config.host}:${this.#boundPort}`;
       if (
         request.url !== '/' ||
-        request.headers.host !== expectedHost ||
+        !allowedHosts(this.config.host, this.#boundPort!).includes(request.headers.host ?? '') ||
+        !allowedPeer(request.socket.remoteAddress) ||
         extensionId === undefined
       ) {
         this.onLog?.('Extension connection rejected: invalid Host, path, or Origin. Check the WebSocket URL and BOOKMARKDOWN_EXTENSION_IDS allowlist.');
@@ -140,7 +141,7 @@ export class WebSocketBridgeServer {
     const match = /^chrome-extension:\/\/([a-p]{32})$/.exec(origin);
     if (
       !match ||
-      (this.config.runtimeMode === 'production' &&
+      (this.config.runtimeMode === 'production' && this.#extensionIds.size > 0 &&
         !this.#extensionIds.has(match[1]))
     ) {
       return undefined;
@@ -226,7 +227,7 @@ export class WebSocketBridgeServer {
     }
     if (
       hello.extensionId !== originExtensionId ||
-      (this.config.runtimeMode === 'production' &&
+      (this.config.runtimeMode === 'production' && this.#extensionIds.size > 0 &&
         !this.#extensionIds.has(hello.extensionId))
     ) {
       this.#rejectHello(socket, 'extension-id-mismatch', hello.mode);

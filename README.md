@@ -2,14 +2,10 @@
 
 [English](README.md) | [繁體中文](README.zh-TW.md)
 
-BookMarkdown MCP Server connects an MCP host to a companion browser extension. The daemon accepts the extension over WebSocket, using loopback by default; the MCP host communicates with a separate stdio proxy over local IPC, using Windows Named Pipes or Linux/macOS Unix domain sockets.
+BookMarkdown MCP Server lets agents call a local daemon directly through MCP Streamable HTTP. The daemon retains the browser extension WebSocket bridge; the stdio proxy and local IPC have been removed.
 
 > [!IMPORTANT]
-> Published npm version `0.2.0` supports Windows and Linux. Its package passed
-> clean installation and MCP initialize smoke tests on Ubuntu and Windows. Real Chrome,
-> companion extension, Chrome Local Network Access, and specific MCP host
-> compatibility remain unverified. Optional LAN connections require WSS and a
-> companion extension configured for the server URL.
+> MCP hosts must use Streamable HTTP; the former stdio proxy is no longer available. Real Chrome, extension, and specific MCP host compatibility remain unverified.
 
 ## Features
 
@@ -31,7 +27,7 @@ See [Features and limitations (Traditional Chinese)](docs/features.md), [Archite
 
 ## Requirements
 
-* Windows, Linux, or macOS (macOS requires the release containing this change; `0.2.1` and earlier do not support macOS)
+* Windows, Linux, or macOS
 * Node.js 22.23.3 or later
 * npm
 * A compatible companion browser extension (maintained separately)
@@ -44,7 +40,7 @@ You can run the published CLI without a global installation:
 npx -y @bookmarkdown/mcp-server@latest
 ```
 
-Set the required environment variables below before starting the daemon. Alternatively, install the CLI globally:
+The new CLI creates settings and tokens on first launch; no ENV setup is required. Alternatively, install the CLI globally:
 
 ```bash
 npm install --global @bookmarkdown/mcp-server
@@ -60,58 +56,57 @@ npm ci
 npm run build
 ```
 
-Set the required environment variables below before starting the daemon.
+After building, run `npm start`.
 
 ## Start the daemon
 
-The CLI starts the production daemon when you omit the subcommand. The production daemon requires a high-entropy pairing token and the exact Chrome extension ID. The companion extension must be configured with the same token through its supported configuration flow.
-
-```powershell
-$env:BOOKMARKDOWN_BRIDGE_TOKEN = (node -p "require('node:crypto').randomBytes(32).toString('hex')")
-$env:BOOKMARKDOWN_EXTENSION_IDS = "<32-character-extension-id>"
-npx -y @bookmarkdown/mcp-server@latest
-```
-
 ```bash
-export BOOKMARKDOWN_BRIDGE_TOKEN="$(node -p "require('node:crypto').randomBytes(32).toString('hex')")"
-export BOOKMARKDOWN_EXTENSION_IDS="<32-character-extension-id>"
-npx -y @bookmarkdown/mcp-server@latest
+npm start
 ```
 
-For a global installation, use `bookmarkdown-mcp-server`; for a built source checkout, use `npm start`.
+For a global installation, run `bookmarkdown-mcp-server`. No environment variables or extension IDs are required: the first launch creates per-user settings and independent MCP/extension tokens; later launches reuse them.
 
-Keep the daemon running in this terminal. Press `Ctrl+C` to stop it. Do not put the pairing token in command-line arguments, URLs, logs, or source control.
+Open the local settings URL printed in the terminal, normally `http://127.0.0.1:38472/`. The page shows **bookmarkdown** and **mcp-server** branding, URLs, masked tokens with reveal/copy controls, supported clients, paired devices, and editable settings. Saved settings and regenerated tokens take effect after restarting.
 
-At startup, the daemon prints the actual WebSocket URL, allowed extension IDs, and BMD > Settings > MCP connection instructions to stderr. The pairing token is marked as configured but never printed; enter the same `BOOKMARKDOWN_BRIDGE_TOKEN` value in the extension. Logs distinguish a successful connection test from a persistent connection and report connection, disconnection, and handshake rejection reasons. They do not include tab metadata or operation payloads. With WSS, the browser must trust the server certificate.
+Open the root path `/` in your browser on the server computer. `/mcp` is the authenticated agent endpoint, and port `38471` is the extension WebSocket listener. After changing or rebuilding the source, stop the old process and run `npm start` again.
+
+Windows uses `%LOCALAPPDATA%\BookMarkdown\mcp-server\config.json`; Linux and macOS use their per-user configuration directories. ENV overrides saved values, and `BOOKMARKDOWN_CONFIG_FILE` selects another file. See the [settings guide](docs/settings.md) for all paths, fields, ENV options, and restart behavior.
+
+Loopback is the default. Enable LAN in the page and restart to connect agents and extensions on multiple devices to one server. Copy the displayed private-IP HTTP/WS URLs. WSS is optional; management remains local-only. Use plaintext LAN connections on a trusted network.
+
+Keep the terminal running; press Ctrl+C to stop. Logs omit tokens. Do not put tokens in URLs, command-line arguments, or source control.
 
 ## Configure an MCP host
 
-Configure your MCP host to start the published proxy with `npx`. No source checkout or global installation is required. Pin the daemon and proxy to the same package version; the IPC handshake rejects version mismatches. The `-y` flag prevents an installation prompt from blocking MCP startup.
+Start the daemon, then configure your MCP host for Streamable HTTP. The host must support custom Authorization headers; JSON fields vary by host. A common configuration shape is:
 
 ```json
 {
   "mcpServers": {
     "bookmarkdown": {
-        "command": "npx",
-        "args": ["-y", "@bookmarkdown/mcp-server@latest", "proxy"]
+      "type": "http",
+      "url": "http://127.0.0.1:38472/mcp",
+      "headers": { "Authorization": "Bearer <BOOKMARKDOWN_MCP_TOKEN>" }
     }
   }
 }
 ```
 
-The MCP host must be able to find `npx` on its PATH. On Windows, hosts that require a command shim may need `npx.cmd` instead.
+The MCP host does not start the daemon. Replace the old proxy `command`/`args` with the HTTP URL; the `proxy` subcommand and `BOOKMARKDOWN_IPC_PIPE_NAME` have been removed. When the daemon is offline, initialize, tools/list, and tools/call cannot connect. HTTP uses stateless JSON responses with no MCP session; GET SSE, DELETE, and other non-POST methods return `405`. Notification streams and resumability are unsupported. Do not automatically retry operations whose outcome is unknown.
 
-Run the published `npx` command outside this repository, and avoid using this checkout as the MCP host's working directory. Inside a same-version checkout, npm may resolve the local package instead of the published CLI and fail with `bookmarkdown-mcp-server: not found` if the local executable is unavailable.
+Copy the running MCP token from the management page into the Authorization header above. The default port is `38472`; LAN clients use the displayed private-IP URL. Every MCP `/mcp` request validates Bearer, Host, and Origin when present, without CORS. MCP and extension tokens are generated independently.
 
-For source development, run `npm ci` and `npm run build`, then use `"command": "node"` with `"args": ["/path/to/mcp-server/dist/cli.js", "proxy"]`. Replace the path with the checkout's absolute path (a Windows path on Windows). This runs local code rather than the npm release.
+The daemon has no configured agent-count quota. All agents share a default limit of **32 in-flight HTTP requests**, including initialize, tools/list, and tools/call. Set `BOOKMARKDOWN_MAX_PENDING_REQUESTS` to an integer from **1 to 256** to change this limit; restart the daemon for the change to take effect. Excess HTTP requests receive `503` with `Retry-After: 1`. Idle agents consume no in-flight request slots. Actual capacity also depends on system resources and workload.
 
-The MCP host starts only the proxy; it does not start the daemon. The proxy uses the default local IPC endpoint named `bookmarkdown-mcp`, a Windows Named Pipe or Linux/macOS Unix domain socket, and does not need the WebSocket pairing token. Start the daemon before using browser tools. On macOS, the socket lives under `/tmp/bookmarkdown-<uid>/` to avoid long `TMPDIR` paths; the directory and socket are restricted to the current user with modes `0700` and `0600`.
+The bridge separately uses the same setting to limit pending browser RPCs; reaching that limit produces the tool error `BRIDGE_BUSY`. One tool call, such as devices.list with tab counts, can issue several browser RPCs. `BOOKMARKDOWN_MAX_CONNECTIONS` defaults to **8** and limits extension WebSocket connections, rather than agents.
 
-The proxy prints a startup reminder to stderr. Its stdout contains only MCP protocol messages. Whether stderr is visible depends on the MCP host; extension connection logs appear in the daemon terminal.
+Each HTTP request has its own MCP server and transport, so different agents can use the same MCP JSON-RPC ID. Each browser RPC gets a separate server-generated UUID `requestId`; the daemon matches the extension reply to both that UUID and the original WebSocket connection, then returns the result through the originating HTTP request. Replies may arrive out of order. See [request routing and shared state (Traditional Chinese)](docs/architecture.md#多-agent-請求配對與共享狀態).
+
+Agents share the MCP token, browser instances, and tool permissions. Reply routing provides no per-agent authorization, exclusive tab ownership, or operation ordering across agents. Concurrent changes to the same tab can affect one another; coordinate conflicting operations at the agent or host level.
 
 ## Security and privacy
 
-The WebSocket server binds to `127.0.0.1` by default. Optional LAN binding accepts one RFC1918 IPv4 address and requires TLS certificate and private-key files; wildcard addresses and unencrypted LAN connections are rejected. The companion extension must connect to the matching `wss://` URL and trust its certificate. Connections still require a pairing token, and production mode checks an exact extension ID allowlist. See the [browser integration guide](docs/browser-integration.md) for configuration and verification limits.
+HTTP/WS defaults to loopback. LAN accepts local/private-network clients and retains independent tokens, Host/Origin, hello identity, schema, and capability checks. The production extension ID allowlist is optional; development accepts any compatible ID. Management and token endpoints remain local-only with same-origin/CSRF checks. LAN HTTP/WS is plaintext; existing ENV options can enable WSS. The settings file contains plaintext tokens, so protect its directory. See [settings](docs/settings.md) and [browser integration](docs/browser-integration.md).
 
 ## Development
 
@@ -121,7 +116,7 @@ npm run typecheck
 npm run build
 ```
 
-For development mode, start the daemon with `npm run dev -- daemon`. Development mode still requires the pairing token. See the [browser integration guide](docs/browser-integration.md) for the current WebSocket contract and validation limits.
+Use `npm run dev -- daemon` for development mode; it reuses settings and tokens and accepts any compatible extension ID. See the [browser integration guide](docs/browser-integration.md) for the current WebSocket contract and validation limits.
 
 ## License
 

@@ -1,15 +1,19 @@
 ---
 title: "瀏覽器整合指南"
-description: "瀏覽器 extension 連線至 BookMarkdown MCP Server loopback 或 TLS 保護的區網 WebSocket 協定與 client 範例。"
-ms.date: 2026-09-29
+description: "瀏覽器 extension 連線至 BookMarkdown MCP Server 本機或私有區網 WebSocket 協定與 client 範例。"
+ms.date: 2026-10-03
 ms.topic: how-to
 ---
 
 ## 狀態與驗證範圍
 
-此 repository 的 server 實作 protocol v2 handshake、probe 與 browser RPC，Node.js 測試涵蓋 loopback 及 Linux 私有介面上的 WSS contract。區網 listener 不代表 companion extension 已支援遠端 URL：extension 必須能設定伺服器 `wss://` 位址並信任其憑證。真實 Chrome extension 互通性、extension 權限、Chrome Local Network Access，以及指定 MCP host 的相容性驗證仍未完成。以下 JavaScript 示範 server 接受的訊息形狀。
+此 repository 的 server 實作 protocol v2 handshake、probe 與 browser RPC，Node.js 測試涵蓋 loopback 及 Linux 私有介面上的 WSS contract。區網 listener 不代表 companion extension 已支援遠端 URL：extension 必須能設定伺服器 `ws://` URL；選用 WSS 時需信任憑證。真實 Chrome extension 互通性、extension 權限、Chrome Local Network Access，以及指定 MCP host 的相容性驗證仍未完成。以下 JavaScript 示範 server 接受的訊息形狀。
 
 Browser integration 文件應涵蓋的範圍與維護規則見[文件規約](documentation-conventions.md)。
+
+## Agent 連線
+
+Agent 直接透過 daemon 的 MCP Streamable HTTP `/mcp` endpoint 呼叫，不再啟動 stdio proxy 或使用 IPC。預設 HTTP URL 為 `http://127.0.0.1:38472/mcp`，使用獨立的 `BOOKMARKDOWN_MCP_TOKEN` Bearer header。Extension 仍透過下列 WebSocket contract 與 `BOOKMARKDOWN_BRIDGE_TOKEN` 配對；其協定版本與 browser RPC 不變。HTTP 設定見 [README](../README.zh-TW.md)。
 
 ## 連線條件
 
@@ -19,17 +23,17 @@ Browser integration 文件應涵蓋的範圍與維護規則見[文件規約](doc
 ws://127.0.0.1:38471/
 ```
 
-預設 host 為 `127.0.0.1`，port 為 `38471`；可用 `BOOKMARKDOWN_WS_PORT` 設定 port。選用的區網模式需將 `BOOKMARKDOWN_WS_HOST` 設為單一 RFC1918 IPv4 位址，並同時設定 `BOOKMARKDOWN_WS_TLS_CERT_FILE` 與 `BOOKMARKDOWN_WS_TLS_KEY_FILE`。此模式使用 `wss://`，TLS 最低版本為 1.2；不接受 `0.0.0.0`、其他 wildcard 或非 RFC1918 位址。只設定 TLS 憑證而 host 保持 loopback 時，listener 也會使用 WSS。
+預設 host 為 `127.0.0.1`，port 為 `38471`。CLI 管理頁可開啟區網模式，重啟後 HTTP／WS 綁定 `0.0.0.0` 並列出私有 IP URL，不要求 TLS。`BOOKMARKDOWN_WS_HOST` 仍可指定單一 RFC1918 IPv4；TLS certificate/key ENV 為選填且須同時設定，使用時提供 WSS（TLS 1.2 以上）。詳見[設定指南](settings.md)。
 
-Server 要求 HTTP `Host` 完全等於設定的 host 與實際 port、path 為 `/`。Origin 必須符合 `chrome-extension://[a-p]{32}`；瀏覽器端應由 extension origin 提出連線，不能把 Origin 當成認證。正式模式仍要求精確的 `BOOKMARKDOWN_EXTENSION_IDS` allowlist。所有模式都要求 pairing token；區網模式使用 TLS 保護 token 與 browser RPC 資料。
+Server 要求 Host 符合 listener 實際 port 與本機／私有介面 IP，path 為 `/`，peer 為本機／RFC1918 位址。Origin 必須符合 `chrome-extension://[a-p]{32}` 並與 hello ID 一致；Origin 不是認證。Production allowlist 為選填，留空接受所有相容 ID；development 不使用固定 allowlist。所有連線仍需正確 token。HTTP／WS 區網資料未加密，適用可信任的區網。
 
 TLS certificate 必須適用於設定的 IP 位址，且 client 裝置必須信任簽發者。只允許可信任的區網 client 通過主機防火牆。Companion extension 必須提供可設定的 server URL，並具備相應的 Chrome 網路權限；本 repository 不包含 extension 端設定，這些瀏覽器條件尚未驗證。
 
-正式模式要求 Origin 中的 extension ID 精確列於 daemon 的 `BOOKMARKDOWN_EXTENSION_IDS`。開發模式不要求固定 allowlist，但 ID 仍須符合格式。兩種模式都要求 hello 的 `extensionId` 與 Origin ID 完全相同，並驗證 pairing token。無效的 Host、path、Origin 或正式模式 allowlist ID 會在 WebSocket upgrade 階段回覆 HTTP `403`，不會收到 `hello-ack`；連線數已達上限時回覆 HTTP `503`。
+正式模式只有設定非空的 `BOOKMARKDOWN_EXTENSION_IDS` 時，才要求 ID 精確符合清單。開發模式不要求固定 allowlist，但 ID 仍須符合格式。兩種模式都要求 hello 的 `extensionId` 與 Origin ID 完全相同，並驗證 pairing token。無效的 Host、path、Origin 或正式模式 allowlist ID 會在 WebSocket upgrade 階段回覆 HTTP `403`，不會收到 `hello-ack`；連線數已達上限時回覆 HTTP `503`。
 
 ## 配對與 hello
 
-daemon 從 `BOOKMARKDOWN_BRIDGE_TOKEN` 讀取 pairing token。瀏覽器 client 必須透過另行確認安全性的流程取得相同 token；本 server contract 未定義 token 的交付方式。token 必須是 32 至 512 UTF-8 bytes。不要將 token 放進 URL、命令列參數、log、MCP 回覆或 source control，也不要在錯誤訊息中輸出 token。
+CLI 首次啟動建立配對 token 並保存在使用者設定檔。從本機管理頁複製目前執行中的 token 給 extension，或以 `BOOKMARKDOWN_BRIDGE_TOKEN` 覆寫。ENV token 支援 32–512 UTF-8 bytes；設定檔使用 32–512 可列印 ASCII 字元。Token 不放入 URL、命令列參數、log、MCP 回覆或 source control。
 
 WebSocket 開啟後，client 必須在預設 5 秒內送出第一則文字 JSON `hello`。一般連線需包含以下欄位，schema 不接受額外欄位：
 
@@ -250,7 +254,11 @@ server 目前使用的拒絕原因如下：
 
 所有 response 必須在收到 request 的同一條 WebSocket 上回覆，並沿用相同 UUID `requestId`。不同 socket 上的回覆、未知 ID 或逾時後才抵達的回覆會被忽略；多個請求可以依 UUID 配對，不必依送出順序回覆。
 
-操作失敗時可回覆下列 strict error shape。`name` 與 `code` 不可為空且最多 128 字元；`message` 最多 1024 字元。Server 會將 extension error 映射為 `EXTENSION_OPERATION_FAILED`，不會轉送敏感 payload。開啟、關閉或移動分頁若逾時或斷線，結果可能不明；server/proxy 不會自動重送。
+多個 agent 可同時透過 HTTP 呼叫同一 daemon，並使用相同的 MCP JSON-RPC `id`。該 `id` 與 WebSocket UUID `requestId` 是不同層級；extension 只需沿用收到的 WebSocket UUID，不需辨識 agent。Daemon 依 UUID 與來源 WebSocket `connectionId` 完成對應的 browser RPC，再由該呼叫原本的 HTTP response 回覆 agent，agent 不直接接收 extension WebSocket 訊息。
+
+取消後才抵達的回覆也會被忽略。單一 HTTP 請求中斷只取消其等待；extension WebSocket 中斷則會影響所有等待該連線回覆的 browser RPC。配對機制不提供同一分頁的操作鎖定或跨 agent 順序保證，衝突操作需由 agent／host 協調。共享額度與完整流程見[架構文件](architecture.md#多-agent-請求配對與共享狀態)。
+
+操作失敗時可回覆下列 strict error shape。`name` 與 `code` 不可為空且最多 128 字元；`message` 最多 1024 字元。Server 會將 extension error 映射為 `EXTENSION_OPERATION_FAILED`，不會轉送敏感 payload。開啟、關閉或移動分頁若逾時或斷線，結果可能不明；server 不會自動重送。
 
 ```json
 {

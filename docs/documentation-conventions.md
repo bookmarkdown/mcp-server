@@ -30,7 +30,7 @@ ms.topic: reference
 | --- | --- |
 | `README.md` | 專案用途、成熟度/驗證狀態、支援平台、需求、目前可用的安裝與啟動方式、主要限制和文件連結。 |
 | `docs/features.md` | 實際可呼叫的 MCP tools、輸入輸出、邊界、錯誤與未實作功能。 |
-| `docs/architecture.md` | 程序責任、資料流、IPC/WebSocket 邊界、生命週期與安全假設。 |
+| `docs/architecture.md` | 程序責任、資料流、HTTP/WebSocket 邊界、生命週期與安全假設。 |
 | `docs/browser-integration.md` | Browser extension WebSocket contract、驗證、hello/ack、RPC schemas、限制、錯誤處理及串接驗收狀態。 |
 | `docs/documentation-conventions.md` | 文件語言、格式、責任分工與維護規則。 |
 
@@ -60,8 +60,8 @@ ms.topic: reference
 4. **協定與相容性**：protocol version、必填/選填欄位、strict schema、capabilities、限制值、request ID 關聯、成功/拒絕範例，以及版本不相容的處理。
 5. **Browser operations**：每個 MCP tool 對應的 extension operation、輸入/輸出、normal/incognito 視窗範圍、分頁 metadata 邊界、權限要求，以及開啟/關閉/移動等副作用操作的結果不明與重送規則。
 6. **錯誤與資源限制**：upgrade/hello/auth/schema 錯誤、timeout、disconnect、取消、payload/連線/pending-request 上限和安全錯誤回覆。
-7. **安全與隱私**：配對 token 管理、loopback/LAN TLS 限制、頁面內容不讀取、tab title/URL 敏感性、incognito 排除責任及不可記錄的資料。
-8. **設定與操作方式**：必要及選用設定、預設值、範圍、daemon/proxy 啟動責任，以及 MCP host 如何啟動 proxy；範例須符合目前 CLI 和 extension contract。
+7. **安全與隱私**：設定檔與 token 管理、本機管理頁邊界、loopback／私有區網 HTTP／WS 與選配 TLS、頁面內容不讀取、tab title/URL 敏感性、incognito 排除責任及不可記錄的資料。
+8. **設定與操作方式**：必要及選用設定、預設值、範圍、daemon 啟動責任，以及 MCP host 如何連線 HTTP；範例須符合目前 CLI 和 extension contract。
 9. **測試與狀態證據**：分開說明 server contract tests、extension tests、真實 Chrome/extension tests 和指定 MCP host tests。記錄實際完成的測試與環境版本；未覆蓋的組合標示 `not verified`，不可用單元測試推論真實瀏覽器相容性。
 10. **維護與文件連結**：指出 contract 的 source schema、operation implementation、相鄰測試、features/architecture 文件，以及跨 repository 變更時要同步檢查的版本。
 

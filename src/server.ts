@@ -1,13 +1,12 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { asBridgeError } from './bridge/errors.js';
 import type { BridgeService } from './bridge/service.js';
-import { IpcClientError, PACKAGE_VERSION } from './ipc/client.js';
+import { PACKAGE_VERSION } from './version.js';
 import { toolCatalog } from './tools/catalog.js';
 import type { ToolExecutor } from './tools/executor.js';
 
 function toolError(error: unknown) {
-  const normalizedError =
-    error instanceof IpcClientError ? error : asBridgeError(error);
+  const normalizedError = asBridgeError(error);
   return {
     isError: true,
     content: [
@@ -193,7 +192,7 @@ function isToolExecutor(
   );
 }
 
-function createBridgeExecutor(bridge: BridgeService): ToolExecutor {
+export function createBridgeExecutor(bridge: BridgeService): ToolExecutor {
   return {
     [toolCatalog.devicesList.name]: (args, { signal }) =>
       bridge.devicesList(args, signal),

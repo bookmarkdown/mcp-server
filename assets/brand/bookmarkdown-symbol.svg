@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160" role="img" aria-labelledby="title desc">
+  <title id="title">bookmarkdown symbol</title>
+  <desc id="desc">A lime bookmark bearing BMD, with a taller, heavier central M emphasizing Markdown.</desc>
+  <path fill="#C6EF8D" d="M42 18h76a18 18 0 0 1 18 18v106l-56-28-56 28V36a18 18 0 0 1 18-18Z"/>
+  <path fill="#15251D" fill-rule="evenodd" d="M34 54h10c8 0 12 4 12 10 0 4-2 7-5 9 5 2 7 5 7 10 0 7-5 11-13 11H34ZM41 61v9h3c3 0 5-2 5-5s-2-4-5-4ZM41 77v10h4c4 0 6-2 6-5s-2-5-6-5ZM62 42h10l9 17 9-17h10v52H89V65L81 80 73 65v29H62ZM105 54h7c11 0 17 8 17 20s-6 20-17 20h-7ZM112 61v26h1c7 0 10-5 10-13s-3-13-10-13Z"/>
+</svg>

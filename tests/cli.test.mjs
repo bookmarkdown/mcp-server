@@ -1,26 +1,25 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
 import { spawn } from 'node:child_process';
-import { createConnection, createServer as createNetServer } from 'node:net';
+import { createServer as createNetServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { getLocalPipePath } from '../dist/ipc/transport.js';
 
-const cliPath = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
+const cliPath = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
 const builtCliPath = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
-const devCliPath = fileURLToPath(new URL('../src/dev.ts', import.meta.url));
+const devCliPath = fileURLToPath(new URL('../dist/dev.js', import.meta.url));
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const cliToken = '0123456789abcdef0123456789abcdef';
 
 function runCli(args, env = {}, entrypoint = cliPath) {
-  const childEnv = { ...process.env, ...env };
+  const temporary = mkdtempSync(join(tmpdir(), 'bmd-cli-settings-'));
+  const childEnv = { ...process.env, BOOKMARKDOWN_CONFIG_FILE: join(temporary, 'config.json'), ...env };
   if (env.BOOKMARKDOWN_EXTENSION_IDS === null) {
     delete childEnv.BOOKMARKDOWN_EXTENSION_IDS;
   }
-  const child = spawn(process.execPath, ['--import', 'tsx', entrypoint, ...args], {
+  const child = spawn(process.execPath, [entrypoint, ...args], {
     cwd: projectRoot,
     env: childEnv,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -37,139 +36,10 @@ function runCli(args, env = {}, entrypoint = cliPath) {
   return new Promise((resolve, reject) => {
     child.once('error', reject);
     child.once('close', (code, signal) => {
+      rmSync(temporary, { recursive: true, force: true });
       resolve({ code, signal, stdout, stderr });
     });
   });
-}
-
-class McpProxyProcess {
-  #child;
-  #buffer = '';
-  #nextId = 1;
-  #pending = new Map();
-  #exit;
-
-  stdout = '';
-  stderr = '';
-
-  constructor(env = {}) {
-    this.#child = spawn(process.execPath, ['--import', 'tsx', cliPath, 'proxy'], {
-      cwd: projectRoot,
-      env: { ...process.env, ...env },
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-    this.#child.stdout.on('data', (chunk) => this.#onStdout(chunk));
-    this.#child.stderr.on('data', (chunk) => {
-      this.stderr += chunk.toString('utf8');
-    });
-    this.#child.on('error', (error) => this.#rejectAll(error));
-    this.#exit = new Promise((resolve) => {
-      this.#child.once('close', (code, signal) => {
-        this.#rejectAll(
-          new Error(`MCP proxy exited (${code ?? signal}). ${this.stderr}`),
-        );
-        resolve({ code, signal });
-      });
-    });
-  }
-
-  initialize() {
-    return this.request('initialize', {
-      protocolVersion: '2025-11-25',
-      capabilities: {},
-      clientInfo: { name: 'cli-test-client', version: '1.0.0' },
-    }).then((result) => {
-      this.notify('notifications/initialized', {});
-      return result;
-    });
-  }
-
-  request(method, params) {
-    const id = this.#nextId++;
-    const response = new Promise((resolve, reject) => {
-      this.#pending.set(id, { resolve, reject });
-    });
-    this.#child.stdin.write(
-      `${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`,
-      (error) => {
-        if (error) {
-          this.#pending.get(id)?.reject(error);
-          this.#pending.delete(id);
-        }
-      },
-    );
-    return response.then((message) => {
-      if (message.error) {
-        throw new Error(message.error.message ?? 'MCP request failed.');
-      }
-      return message.result;
-    });
-  }
-
-  notify(method, params) {
-    this.#child.stdin.write(
-      `${JSON.stringify({ jsonrpc: '2.0', method, params })}\n`,
-    );
-  }
-
-  async close() {
-    if (this.#child.exitCode !== null || this.#child.signalCode !== null) {
-      await this.#exit;
-      return;
-    }
-    this.#child.stdin.end();
-    let timer;
-    try {
-      await Promise.race([
-        this.#exit,
-        new Promise((_, reject) => {
-          timer = setTimeout(() => {
-            this.#child.kill();
-            reject(new Error('MCP proxy did not exit after stdin closed.'));
-          }, 5000);
-        }),
-      ]);
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
-  #onStdout(chunk) {
-    const text = chunk.toString('utf8');
-    this.stdout += text;
-    this.#buffer += text;
-    for (;;) {
-      const newline = this.#buffer.indexOf('\n');
-      if (newline < 0) {
-        return;
-      }
-      const line = this.#buffer.slice(0, newline).replace(/\r$/, '');
-      this.#buffer = this.#buffer.slice(newline + 1);
-      if (line.length === 0) {
-        continue;
-      }
-      let message;
-      try {
-        message = JSON.parse(line);
-        assert.equal(message.jsonrpc, '2.0');
-      } catch (error) {
-        this.#rejectAll(error);
-        return;
-      }
-      const pending = this.#pending.get(message.id);
-      if (pending) {
-        this.#pending.delete(message.id);
-        pending.resolve(message);
-      }
-    }
-  }
-
-  #rejectAll(error) {
-    for (const pending of this.#pending.values()) {
-      pending.reject(error);
-    }
-    this.#pending.clear();
-  }
 }
 
 test('defaults to daemon when no subcommand is provided', async () => {
@@ -184,12 +54,12 @@ test('defaults to daemon when no subcommand is provided', async () => {
 });
 
 test('rejects invalid or extra subcommand arguments', async () => {
-  for (const args of [['browser'], ['proxy', 'extra'], ['--', 'proxy']]) {
+  for (const args of [['browser'], ['proxy'], ['daemon', 'extra'], ['--', 'proxy']]) {
     const result = await runCli(args);
     assert.notEqual(result.code, 0);
     assert.match(
       result.stderr,
-      /Usage: bookmarkdown-mcp-server \[daemon\|proxy\] \(defaults to daemon\)/,
+      /Usage: bookmarkdown-mcp-server \[daemon\] \(defaults to daemon\)/,
     );
     assert.equal(result.stdout, '');
   }
@@ -224,7 +94,7 @@ test(
     assert.notEqual(result.code, 0);
     assert.match(
       result.stderr,
-      /Usage: bookmarkdown-mcp-server \[daemon\|proxy\] \(defaults to daemon\)/,
+      /Usage: bookmarkdown-mcp-server \[daemon\] \(defaults to daemon\)/,
     );
     assert.equal(result.stdout, '');
   },
@@ -242,12 +112,13 @@ test('keeps package defaults in production and routes the dev entrypoint explici
     ['daemon'],
     {
       BOOKMARKDOWN_BRIDGE_TOKEN: cliToken,
-      BOOKMARKDOWN_EXTENSION_IDS: null,
+      BOOKMARKDOWN_MCP_TOKEN: cliToken,
+      BOOKMARKDOWN_EXTENSION_IDS: 'invalid',
       NODE_ENV: 'development',
     },
   );
   assert.equal(production.code, 1);
-  assert.match(production.stderr, /BOOKMARKDOWN_EXTENSION_IDS must contain/);
+  assert.match(production.stderr, /BOOKMARKDOWN_EXTENSION_IDS contains an invalid/);
 
   const occupied = createNetServer();
   await new Promise((resolve, reject) => {
@@ -262,6 +133,7 @@ test('keeps package defaults in production and routes the dev entrypoint explici
     ['daemon'],
     {
       BOOKMARKDOWN_BRIDGE_TOKEN: cliToken,
+      BOOKMARKDOWN_MCP_TOKEN: cliToken,
       BOOKMARKDOWN_EXTENSION_IDS: null,
       BOOKMARKDOWN_WS_PORT: String(address.port),
       NODE_ENV: 'production',
@@ -271,44 +143,6 @@ test('keeps package defaults in production and routes the dev entrypoint explici
   assert.equal(development.code, 1);
   assert.match(development.stderr, /EADDRINUSE|already in use/i);
   assert.doesNotMatch(development.stderr, /BOOKMARKDOWN_EXTENSION_IDS/);
-});
-
-test('dispatches proxy mode without a daemon and keeps MCP on stdout', async (t) => {
-  const proxy = new McpProxyProcess({
-    BOOKMARKDOWN_IPC_PIPE_NAME: `bookmarkdown-cli-${process.pid}-${randomUUID()}`,
-  });
-  t.after(() => proxy.close());
-
-  const initialized = await proxy.initialize();
-  assert.equal(initialized.serverInfo.name, 'bookmarkdown-mcp-server');
-  const listed = await proxy.request('tools/list', {});
-  assert.deepEqual(
-    listed.tools.map((tool) => tool.name).sort(),
-    [
-      'browser.closeTab',
-      'browser.countOpenTabs',
-      'browser.countOpenWindows',
-      'browser.listTabs',
-      'browser.moveTab',
-      'browser.openTab',
-      'devices.list',
-    ],
-  );
-  const unavailable = await proxy.request('tools/call', {
-    name: 'devices.list',
-    arguments: {},
-  });
-  assert.equal(unavailable.isError, true);
-  assert.equal(
-    JSON.parse(unavailable.content[0].text).error.code,
-    'DAEMON_UNAVAILABLE',
-  );
-  assert.equal(proxy.stderr.includes('listening'), false);
-  assert.match(proxy.stderr, /MCP stdio proxy started/);
-  assert.match(proxy.stderr, /Start the daemon separately/);
-  for (const line of proxy.stdout.split('\n').filter(Boolean)) {
-    assert.equal(JSON.parse(line).jsonrpc, '2.0');
-  }
 });
 
 test('starts the built daemon CLI and releases its listeners on shutdown', {
@@ -323,15 +157,19 @@ test('starts the built daemon CLI and releases its listeners on shutdown', {
   assert.ok(address && typeof address !== 'string');
   await new Promise((resolve) => reserved.close(resolve));
 
-  const pipeName = `bookmarkdown-cli-${process.pid}-${randomUUID()}`;
+  const httpReserved = createNetServer();
+  await new Promise(resolve => httpReserved.listen(0, '127.0.0.1', resolve));
+  const httpPort = httpReserved.address().port;
+  await new Promise(resolve => httpReserved.close(resolve));
+  const configDirectory = mkdtempSync(join(tmpdir(), 'bmd-cli-start-'));
+  t.after(() => rmSync(configDirectory, { recursive: true, force: true }));
   const child = spawn(process.execPath, [builtCliPath, 'daemon'], {
     cwd: projectRoot,
     env: {
       ...process.env,
-      BOOKMARKDOWN_BRIDGE_TOKEN: cliToken,
-      BOOKMARKDOWN_EXTENSION_IDS: 'a'.repeat(32),
+      BOOKMARKDOWN_CONFIG_FILE: join(configDirectory, 'config.json'),
       BOOKMARKDOWN_WS_PORT: String(address.port),
-      BOOKMARKDOWN_IPC_PIPE_NAME: pipeName,
+      BOOKMARKDOWN_MCP_PORT: String(httpPort),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -361,8 +199,15 @@ test('starts the built daemon CLI and releases its listeners on shutdown', {
     clearTimeout(readyTimer);
   }
   assert.equal(stdout, '');
+  const generatedSettings = JSON.parse(readFileSync(join(configDirectory, 'config.json'), 'utf8'));
+  assert.match(generatedSettings.mcpToken, /^[a-f0-9]{64}$/);
+  assert.notEqual(generatedSettings.mcpToken, generatedSettings.bridgeToken);
+  assert.equal(stderr.includes(generatedSettings.mcpToken), false);
+  assert.equal(stderr.includes(generatedSettings.bridgeToken), false);
+  assert.match(stderr, /Open local settings:/);
+  assert.ok(stderr.trimEnd().endsWith(`Open the settings page in your browser: http://127.0.0.1:${httpPort}/`));
   assert.equal(stderr.includes(cliToken), false);
-  assert.ok(stderr.includes(getLocalPipePath(pipeName)));
+  assert.ok(stderr.includes(`http://127.0.0.1:${httpPort}/mcp`));
   assert.ok(stderr.includes(`WebSocket URL: ws://127.0.0.1:${address.port}/`));
   assert.match(stderr, /Pairing token: configured \(hidden\)/);
   assert.match(stderr, /Waiting for an extension connection/);
@@ -385,9 +230,5 @@ test('starts the built daemon CLI and releases its listeners on shutdown', {
     rebound.listen(address.port, '127.0.0.1', resolve);
   });
   await new Promise((resolve) => rebound.close(resolve));
-  await assert.rejects(new Promise((resolve, reject) => {
-    const socket = createConnection(getLocalPipePath(pipeName));
-    socket.once('connect', () => { socket.destroy(); resolve(); });
-    socket.once('error', reject);
-  }));
+  await assert.rejects(fetch(`http://127.0.0.1:${httpPort}/mcp`));
 });

@@ -140,6 +140,8 @@ export class BridgeService {
       .some((instance) => instance.status === 'online');
   }
 
+  public get instances(): InstanceSnapshot[] { return this.#connections.listInstances(); }
+
   public async countOpenTabs(
     instanceId: string,
     signal?: AbortSignal,

@@ -1,8 +1,10 @@
 import { spawn, spawnSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createServer } from "node:net";
+import { HttpTestClient } from "../tests/helpers/http-client.mjs";
 
 const npmCli = process.env.npm_execpath;
 if (!npmCli) {
@@ -13,6 +15,7 @@ function runNpm(args) {
   const result = spawnSync(process.execPath, [npmCli, ...args], {
     encoding: "utf8",
     maxBuffer: 10 * 1024 * 1024,
+    timeout: 120_000,
   });
   if (result.error) {
     throw result.error;
@@ -28,8 +31,8 @@ function runNpm(args) {
 const temporaryDirectory = mkdtempSync(
   join(tmpdir(), "bookmarkdown-verify-pack-"),
 );
-let proxy;
-let proxyExit;
+let daemon;
+let daemonExit;
 
 try {
   const packOutput = runNpm([
@@ -48,7 +51,11 @@ try {
   const requiredPaths = [
     "dist/cli.js",
     "dist/daemon/service.js",
-    "dist/ipc/transport.js",
+    "dist/http-config.js",
+    "dist/settings.js",
+    "dist/management/service.js",
+    "dist/management/page.js",
+    "dist/server.js",
     "LICENSE",
     "README.md",
     "README.zh-TW.md",
@@ -69,6 +76,8 @@ try {
     tarballPath,
     "--no-audit",
     "--no-fund",
+    "--fetch-retries=0",
+    "--fetch-timeout=10000",
   ]);
 
   const installedPackageDirectory = join(
@@ -80,154 +89,60 @@ try {
   const installedPackage = JSON.parse(
     readFileSync(join(installedPackageDirectory, "package.json"), "utf8"),
   );
-  const binPath = join(
-    installDirectory,
-    "node_modules",
-    ".bin",
-    `bookmarkdown-mcp-server${process.platform === "win32" ? ".cmd" : ""}`,
-  );
-  proxy = spawn(binPath, ["proxy"], {
-    cwd: installDirectory,
-    env: {
-      ...process.env,
-      BOOKMARKDOWN_IPC_PIPE_NAME: `bookmarkdown-package-smoke-${process.pid}-${randomUUID()}`,
-    },
-    shell: process.platform === "win32",
-    stdio: ["pipe", "pipe", "pipe"],
-  });
-  let stdout = "";
-  let stderr = "";
-  let buffer = "";
-  proxyExit = new Promise((resolve) => {
-    proxy.once("close", (code, signal) => resolve({ code, signal }));
-  });
-  proxy.stdout.setEncoding("utf8");
-  proxy.stderr.setEncoding("utf8");
-  proxy.stdout.on("data", (chunk) => {
-    stdout += chunk;
-    buffer += chunk;
-  });
-  proxy.stderr.on("data", (chunk) => {
-    stderr += chunk;
-  });
-
-  let resolveInitialize;
-  let rejectInitialize;
-  let initializeSettled = false;
-  const initializeResponse = new Promise((resolve, reject) => {
-    resolveInitialize = resolve;
-    rejectInitialize = reject;
-  });
-  const settleInitialize = (callback, value) => {
-    if (initializeSettled) {
-      return;
-    }
-    initializeSettled = true;
-    clearTimeout(initializeTimer);
-    callback(value);
+  if ([...packedPaths].some(path => path.startsWith('dist/ipc/') || path.startsWith('dist/proxy/'))) {
+    throw new Error('Package contains retired IPC/proxy files.');
+  }
+  const reservePort = async () => {
+    const server = createServer();
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    const port = server.address().port;
+    await new Promise(resolve => server.close(resolve));
+    return port > 10080 ? port : reservePort();
   };
-  const initializeTimer = setTimeout(() => {
-    proxy.kill();
-    settleInitialize(
-      rejectInitialize,
-      new Error(`MCP initialize timed out. stderr: ${stderr}`),
-    );
-  }, 5000);
-  proxy.once("error", (error) => settleInitialize(rejectInitialize, error));
-  proxy.once("close", (code, signal) => {
-    if (!initializeSettled) {
-      settleInitialize(
-        rejectInitialize,
-        new Error(`Proxy exited before MCP initialize (${code ?? signal}). ${stderr}`),
-      );
-    }
+  const httpPort = await reservePort();
+  const wsPort = await reservePort();
+  const token = randomBytes(32).toString('hex');
+  daemon = spawn(process.execPath, [join(installedPackageDirectory, 'dist', 'cli.js'), 'daemon'], {
+    cwd: installDirectory,
+    env: { ...process.env, BOOKMARKDOWN_MCP_TOKEN: token, BOOKMARKDOWN_BRIDGE_TOKEN: token,
+      BOOKMARKDOWN_CONFIG_FILE: join(installDirectory, 'config.json'),
+      BOOKMARKDOWN_EXTENSION_IDS: 'a'.repeat(32), BOOKMARKDOWN_MCP_PORT: String(httpPort),
+      BOOKMARKDOWN_WS_PORT: String(wsPort) },
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
-  proxy.stdout.on("data", () => {
-    for (;;) {
-      const newline = buffer.indexOf("\n");
-      if (newline < 0) {
-        return;
-      }
-      const line = buffer.slice(0, newline).replace(/\r$/, "");
-      buffer = buffer.slice(newline + 1);
-      if (!line) {
-        continue;
-      }
-      let message;
-      try {
-        message = JSON.parse(line);
-      } catch (error) {
-        settleInitialize(rejectInitialize, error);
-        return;
-      }
-      if (message.id === 1) {
-        settleInitialize(resolveInitialize, message);
-        return;
-      }
-    }
+  let stdout = '';
+  let stderr = '';
+  daemon.stdout.on('data', chunk => { stdout += chunk; });
+  daemon.stderr.on('data', chunk => { stderr += chunk; });
+  daemonExit = new Promise(resolve => daemon.once('close', (code, signal) => resolve({ code, signal })));
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`HTTP daemon readiness timed out: ${stderr}`)), 5000);
+    daemon.once('error', error => { clearTimeout(timer); reject(error); });
+    daemon.once('close', () => { clearTimeout(timer); reject(new Error(`Daemon exited: ${stderr}`)); });
+    daemon.stderr.on('data', () => {
+      if (stderr.includes('BookMarkdown daemon listening')) { clearTimeout(timer); resolve(); }
+    });
   });
-  proxy.stdin.write(
-    `${JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "initialize",
-      params: {
-        protocolVersion: "2025-11-25",
-        capabilities: {},
-        clientInfo: { name: "package-smoke", version: "1.0.0" },
-      },
-    })}\n`,
-  );
-
-  const response = await initializeResponse;
-  if (
-    response.jsonrpc !== "2.0" ||
-    response.error ||
-    response.result?.serverInfo?.name !== "bookmarkdown-mcp-server" ||
-    response.result.serverInfo.version !== installedPackage.version
-  ) {
-    throw new Error(`Unexpected MCP initialize response: ${JSON.stringify(response)}`);
-  }
-
-  proxy.stdin.write(
-    `${JSON.stringify({
-      jsonrpc: "2.0",
-      method: "notifications/initialized",
-      params: {},
-    })}\n`,
-  );
-  proxy.stdin.end();
+  const client = new HttpTestClient(`http://127.0.0.1:${httpPort}/mcp`, token);
+  const response = await client.initialize();
+  if (response.serverInfo.name !== 'bookmarkdown-mcp-server' || response.serverInfo.version !== installedPackage.version)
+    throw new Error('Unexpected MCP initialize result.');
+  if ((await client.request('tools/list')).tools.length !== 7) throw new Error('Unexpected tool catalog.');
+  if (stdout || stderr.includes(token)) throw new Error('Daemon exposed protocol output or credentials.');
+  daemon.kill('SIGINT');
   let exitTimer;
-  const exit = await Promise.race([
-    proxyExit,
-    new Promise((_, reject) => {
-      exitTimer = setTimeout(() => {
-        proxy.kill();
-        reject(new Error("Installed MCP proxy did not exit after stdin EOF."));
-      }, 5000);
-    }),
-  ]).finally(() => clearTimeout(exitTimer));
-  if (exit.code !== 0) {
-    throw new Error(`Installed MCP proxy exited (${exit.code ?? exit.signal}). ${stderr}`);
-  }
-
-  const protocolLines = stdout.split(/\r?\n/).filter(Boolean);
-  if (protocolLines.length === 0) {
-    throw new Error("Installed MCP proxy did not write protocol output.");
-  }
-  for (const line of protocolLines) {
-    if (JSON.parse(line).jsonrpc !== "2.0") {
-      throw new Error("Installed MCP proxy wrote non-JSON-RPC output to stdout.");
-    }
-  }
+  const exit = await Promise.race([daemonExit, new Promise((_, reject) => {
+    exitTimer = setTimeout(() => reject(new Error('Daemon shutdown timed out.')), 5000);
+  })]).finally(() => clearTimeout(exitTimer));
+  if (exit.code !== 0 && exit.signal !== 'SIGINT') throw new Error('Installed daemon failed to shut down.');
 
   console.log(
     `Verified npm package contents (${packReport.files.length} files) and initialized ${installedPackage.name}@${installedPackage.version}.`,
   );
 } finally {
-  if (proxy && proxy.exitCode === null && proxy.signalCode === null) {
-    proxy.kill();
-    await proxyExit;
+  if (daemon && daemon.exitCode === null && daemon.signalCode === null) {
+    daemon.kill();
+    await daemonExit;
   }
   rmSync(temporaryDirectory, { recursive: true, force: true });
 }
