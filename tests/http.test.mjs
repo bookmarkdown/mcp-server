@@ -35,11 +35,11 @@ test('validates MCP port and independent HTTP credential', () => {
 test('initializes, lists all tools, calls tools and isolates concurrent request IDs over HTTP', async t => {
   const { daemon, client } = await start(t);
   assert.equal((await client.initialize()).serverInfo.name, 'bookmarkdown-mcp-server');
-  assert.equal((await client.request('tools/list')).tools.length, 7);
+  assert.equal((await client.request('tools/list')).tools.length, 9);
   const second = new HttpTestClient(daemon.mcpUrl, token);
   client.nextId = second.nextId = 42;
   const results = await Promise.all([client.request('tools/list'), second.initialize()]);
-  assert.equal(results[0].tools.length, 7);
+  assert.equal(results[0].tools.length, 9);
   assert.equal(results[1].serverInfo.name, 'bookmarkdown-mcp-server');
   await assert.rejects(client.call('browser.countOpenTabs', { instanceId: '7d8c2f92-12c8-4bd2-9701-12e602deaf01' }), { code: 'EXTENSION_NOT_CONNECTED' });
   const response = await fetch(daemon.mcpUrl, { method: 'POST', headers: headers(),

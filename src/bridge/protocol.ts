@@ -115,7 +115,49 @@ export const moveTabResultSchema = z
   })
   .strict();
 
+export const SEARCH_BOOKMARKS_OPERATION = 'bookmarks.search' as const;
+export const SEARCH_TAGS_OPERATION = 'tags.search' as const;
+const tagIdSchema = browserSafeIntegerSchema.refine((id) => id > 0);
+const tagKeywordSchema = z.string().min(1).max(256).refine((value) => value.trim().length > 0);
+export const searchBookmarksPayloadSchema = z.object({
+  keywords: z.array(tagKeywordSchema).max(50).default([]),
+  tagIds: z.array(tagIdSchema).max(50).default([]),
+  search: z.string().max(1024).default(''),
+  limit: z.number().int().min(1).max(10).default(10),
+  offset: browserSafeIntegerSchema.default(0),
+}).strict();
+export const searchTagsPayloadSchema = z.object({
+  query: z.string().max(256).default(''),
+  limit: z.number().int().min(1).max(10).default(10),
+  offset: browserSafeIntegerSchema.default(0),
+}).strict();
+const searchTagSchema = z.object({
+  id: tagIdSchema, name: boundedUtf8String(256, 256),
+  path: boundedUtf8String(1024, 1024), truncated: z.boolean(),
+}).strict();
+const searchPageShape = {
+  totalCount: browserSafeIntegerSchema,
+  nextOffset: browserSafeIntegerSchema.nullable(),
+  queriedAt: z.string().datetime(),
+};
+export const searchBookmarksResultSchema = z.object({
+  ...searchPageShape,
+  bookmarks: z.array(z.object({
+    id: tagIdSchema, title: browserTabTitleSchema, url: browserTabUrlSchema,
+    description: boundedUtf8String(512, 1024),
+    tags: z.array(searchTagSchema).max(10), truncated: z.boolean(),
+  }).strict()).max(10),
+}).strict();
+export const searchTagsResultSchema = z.object({
+  ...searchPageShape,
+  tags: z.array(searchTagSchema.extend({
+    parentId: tagIdSchema.nullable(), directBookmarkCount: browserSafeIntegerSchema,
+  }).strict()).max(10),
+}).strict();
+
 export const browserOperationContracts = {
+  [SEARCH_BOOKMARKS_OPERATION]: {payload: searchBookmarksPayloadSchema, result: searchBookmarksResultSchema},
+  [SEARCH_TAGS_OPERATION]: {payload: searchTagsPayloadSchema, result: searchTagsResultSchema},
   [COUNT_OPEN_TABS_OPERATION]: {
     payload: z.object({}).strict(),
     result: countOpenTabsResultSchema,
@@ -170,6 +212,10 @@ export const extensionHelloSchema = z
 export type ExtensionHello = z.infer<typeof extensionHelloSchema>;
 
 export const browserRequestSchema = z.discriminatedUnion('operation', [
+  z.object({type: z.literal('browser/request'), requestId: z.string().uuid(),
+    operation: z.literal(SEARCH_BOOKMARKS_OPERATION), payload: searchBookmarksPayloadSchema}).strict(),
+  z.object({type: z.literal('browser/request'), requestId: z.string().uuid(),
+    operation: z.literal(SEARCH_TAGS_OPERATION), payload: searchTagsPayloadSchema}).strict(),
   z
     .object({
       type: z.literal('browser/request'),

@@ -11,7 +11,7 @@ ms.topic: how-to
 
 永久測試在 sibling extension repository 的 `e2e/mcp-integration.spec.ts` 與 `e2e/mcp-server.ts`。兩個情境分別使用 loopback 與 server LAN 模式廣告的 RFC1918 網卡 URL，並各自驗證下表的配對、工具及重啟流程。測試使用原始 production manifest，沒有增加 host grant、LNA bypass、寬鬆 CSP 或 fake extension；兩種 WS 均可直接連線。這不代表最低 Chrome 116、其他 Chrome 版本、跨實體電腦 LAN 或選配 WSS 已驗證。Firefox 依 extension ADR 0012 延後。
 
-上述 npm `0.4.0` 為歷史 WS 基線：companion extension 199 項單元測試、完整 65 項 Chrome E2E、compile/build 通過，125 張附件截圖已檢視。新配對引導、輪替提醒與三段健康檢查已加入目前 source，但尚未發布；完整驗收另用更新後 server source build，不把新功能算入已發布版本。
+上述 npm `0.4.0` 為歷史 WS 基線：companion extension 199 項單元測試、完整 65 項 Chrome E2E、compile/build 通過，125 張附件截圖已檢視。配對引導、輪替提醒與三段健康檢查已包含在 server `0.4.1`；下列驗收使用更新後 server source build，不把 source 測試當成 npm artifact 的額外驗證。
 
 2026-10-09 更新後的 source 驗收：server typecheck/build 通過，Node 測試 47 項中 44 項通過、3 項 Linux WSS／Unix symlink 情境在 Windows 略過。Companion extension 202 項單元測試、compile/Chrome build、完整 69 項 Chrome E2E 通過，152 張附件截圖已檢視。Server HTTP shutdown／upgrade socket 清理修正後，使用最終 build 重跑本機 WS、LAN WS 與四項 P1/P2 UI 情境，6 項全通過、35 張截圖全數檢視；英文／繁中、390px／1440px、亮／暗主題均無水平溢出。健康檢查實際經過 HTTP initialize、tools/list 與已註冊套件的唯讀計數；沒有增加 MCP 工具或瀏覽器異動操作。
 
@@ -27,11 +27,11 @@ ms.topic: how-to
 
 Browser integration 文件應涵蓋的範圍與維護規則見[文件規約](documentation-conventions.md)。
 
-本次一鍵配對以目前 server source `0.4.1` 加上本次修改驗證：Node 測試 49 項中 46 項通過、3 項 Windows 不適用情境略過，typecheck/build 通過；companion extension 205 項單元測試、compile/build 通過。Chrome 完整執行 74 項，72 項通過，2 項因既有版本預期 `0.4.0` 與 source `0.4.1` 不同而失敗；指定實際版本重跑後兩項通過，沒有 flaky 或隱藏重試。兩份報告共 169 張截圖已檢視。新增四項涵蓋英文／繁中、亮／暗、390px／1440px 的真實管理頁跳轉與草稿匯入；也驗證 Options 單例、測試不保存、明確啟用、複製連結及錯誤 token／無效 fragment 不改已保存設定。一項使用同機私有網卡，其餘使用 loopback；跨實體 LAN 仍未驗證。這項新增連結功能尚未發布，操作見[設定指南](settings.md#one-click-extension-pairing)。
+一鍵配對的歷史驗收使用 server source `0.4.1` 加上當時修改：Node 測試 49 項中 46 項通過、3 項 Windows 不適用情境略過，typecheck/build 通過；companion extension 205 項單元測試、compile/build 通過。Chrome 完整執行 74 項，72 項通過，2 項因既有版本預期 `0.4.0` 與 source `0.4.1` 不同而失敗；指定實際版本重跑後兩項通過，沒有 flaky 或隱藏重試。兩份報告共 169 張截圖已檢視。新增四項涵蓋英文／繁中、亮／暗、390px／1440px 的真實管理頁跳轉與草稿匯入；也驗證 Options 單例、測試不保存、明確啟用、複製連結及錯誤 token／無效 fragment 不改已保存設定。一項使用同機私有網卡，其餘使用 loopback；跨實體 LAN 仍未驗證。連結功能已包含在 server `0.4.1` release tag；這裡保留原始 source 驗收範圍，不宣稱重新測過 npm artifact。操作見[設定指南](settings.zh-TW.md#一鍵套件配對)。
 
 ## 實際設定流程
 
-1. 安裝 Node.js `22.23.3` 以上版本。新版管理頁使用已建置 source checkout 的 `npm start`；WS 基線可執行 `npx -y @bookmarkdown/mcp-server@0.4.0`。保持終端機開啟，首次產生設定檔及兩組 token，不需先設定 ENV 或 extension ID。
+1. 安裝 Node.js `22.23.3` 以上版本。使用 `npx -y @bookmarkdown/mcp-server@latest`，或建置 source checkout 後執行 `npm start`。配對引導、健康檢查與一鍵配對需 server `0.4.1` 或更新版本及相容的新版套件；`0.4.0` 僅是上方測試的歷史 WS 基線。保持終端機開啟，首次產生設定檔及兩組 token，不需先設定 ENV 或 extension ID。
 2. 開啟終端機列出的管理頁，通常是 `http://127.0.0.1:38472/`。從「瀏覽器套件」卡片複製 WebSocket URL 與配對 token。
 3. 在 BMD「設定 → MCP」貼入上述兩個值，按「測試連線」；成功表示 token 與 WebSocket v2 probe 通過，尚未保存或註冊裝置。
 4. 按「儲存並啟用」，或先「儲存」再勾選「保持 bridge 連線」。步驟列分清驗證、儲存與註冊。套件顯示「已連線」，管理頁出現裝置名稱才算持久連線完成；別名設定放在配對後，UUID 跨重連保持不變。
@@ -44,7 +44,7 @@ Browser integration 文件應涵蓋的範圍與維護規則見[文件規約](doc
 | WebSocket URL + 配對 token | Chrome 套件 | `ws://127.0.0.1:38471/`，token 放 hello 訊息，不能放 URL。 |
 | 管理頁 URL | 啟動 daemon 的電腦 | `http://127.0.0.1:38472/`，不用貼到套件 endpoint 欄位。 |
 
-更新後的兩端 source 另支援管理頁一鍵帶入：預填指定的 Chrome ID `kdnjdggdbibdliholcdkmdkajacdmnhd`，可改開發版 ID；選執行中的本機／LAN WS 端點，按「連接 Chrome 套件」，套件清除片段參數、帶入草稿並提示測試。只有「儲存並啟用」才更新設定及註冊。可明確複製含配對 token 的連結，貼入另一台已安裝套件的 Chrome 網址列；此新增流程尚未發布，詳見[設定指南](settings.md#one-click-extension-pairing)。
+Server `0.4.1` 與相容的新版套件支援管理頁一鍵帶入：預填指定的 Chrome ID `kdnjdggdbibdliholcdkmdkajacdmnhd`，可改開發版 ID；選執行中的本機／LAN WS 端點，按「連接 Chrome 套件」，套件清除片段參數、帶入草稿並提示測試。只有「儲存並啟用」才更新設定及註冊。可明確複製含配對 token 的連結，貼入另一台已安裝套件的 Chrome 網址列，詳見[設定指南](settings.zh-TW.md#一鍵套件配對)。
 
 `POST /api/pairing-link` 沿用本機／Host／Origin／CSRF 保護，只接受有效 ID 及當前廣告端點，採用目前生效的 bridge token。這是使用者授權的 credential fragment handoff，不是把 token 放進 WS endpoint URL，也不改 HTTP Bearer 或 hello wire contract。Options HTML 只允許本機 HTTP 管理頁來源直接開啟；沒有新增 MCP 工具或外部 runtime 操作。
 

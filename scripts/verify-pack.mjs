@@ -1,9 +1,11 @@
+import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:net";
+import { pathToFileURL } from "node:url";
 import { HttpTestClient } from "../tests/helpers/http-client.mjs";
 
 const npmCli = process.env.npm_execpath;
@@ -56,6 +58,7 @@ try {
     "dist/management/service.js",
     "dist/management/page.js",
     "dist/server.js",
+    "dist/tools/catalog.js",
     "LICENSE",
     "README.md",
     "README.zh-TW.md",
@@ -127,7 +130,13 @@ try {
   const response = await client.initialize();
   if (response.serverInfo.name !== 'bookmarkdown-mcp-server' || response.serverInfo.version !== installedPackage.version)
     throw new Error('Unexpected MCP initialize result.');
-  if ((await client.request('tools/list')).tools.length !== 7) throw new Error('Unexpected tool catalog.');
+  const { toolCatalog } = await import(pathToFileURL(join(installedPackageDirectory, 'dist/tools/catalog.js')).href);
+  const advertisedTools = (await client.request('tools/list')).tools;
+  assert.deepEqual(
+    advertisedTools.map(({ name }) => name).sort(),
+    Object.values(toolCatalog).map(({ name }) => name).sort(),
+    'Installed daemon tool catalog does not match its declared tools.',
+  );
   if (stdout || stderr.includes(token)) throw new Error('Daemon exposed protocol output or credentials.');
   daemon.kill('SIGINT');
   let exitTimer;
