@@ -200,6 +200,117 @@ export function createMcpServer(
     catch (error) { return toolError(error); }
   });
 
+  server.registerTool(toolCatalog.createBookmark.name, {
+    description: toolCatalog.createBookmark.description,
+    inputSchema: toolCatalog.createBookmark.inputSchema,
+    outputSchema: toolCatalog.createBookmark.outputSchema,
+    annotations: toolCatalog.createBookmark.annotations,
+  }, async (args, context) => {
+    try {
+      const result = await executor[toolCatalog.createBookmark.name](args, {signal: context.mcpReq.signal});
+      return {...toolSuccess(result), isError: result.status !== 'success'};
+    } catch (error) { return toolError(error); }
+  });
+  server.registerTool(toolCatalog.updateBookmark.name, {
+    description: toolCatalog.updateBookmark.description,
+    inputSchema: toolCatalog.updateBookmark.inputSchema,
+    outputSchema: toolCatalog.updateBookmark.outputSchema,
+    annotations: toolCatalog.updateBookmark.annotations,
+  }, async (args, context) => {
+    try {
+      const result = await executor[toolCatalog.updateBookmark.name](args, {signal: context.mcpReq.signal});
+      return {...toolSuccess(result), isError: result.status !== 'success'};
+    } catch (error) { return toolError(error); }
+  });
+  server.registerTool(toolCatalog.deleteBookmark.name, {
+    description: toolCatalog.deleteBookmark.description,
+    inputSchema: toolCatalog.deleteBookmark.inputSchema,
+    outputSchema: toolCatalog.deleteBookmark.outputSchema,
+    annotations: toolCatalog.deleteBookmark.annotations,
+  }, async (args, context) => {
+    try {
+      const result = await executor[toolCatalog.deleteBookmark.name](args, {signal: context.mcpReq.signal});
+      return {...toolSuccess(result), isError: result.status !== 'success'};
+    } catch (error) { return toolError(error); }
+  });
+  server.registerTool(toolCatalog.replaceBookmarkTags.name, {
+    description: toolCatalog.replaceBookmarkTags.description,
+    inputSchema: toolCatalog.replaceBookmarkTags.inputSchema,
+    outputSchema: toolCatalog.replaceBookmarkTags.outputSchema,
+    annotations: toolCatalog.replaceBookmarkTags.annotations,
+  }, async (args, context) => {
+    try {
+      const result = await executor[toolCatalog.replaceBookmarkTags.name](args, {signal: context.mcpReq.signal});
+      return {...toolSuccess(result), isError: result.status !== 'success'};
+    } catch (error) { return toolError(error); }
+  });
+  server.registerTool(toolCatalog.setBookmarkTagMembership.name, {
+    description: toolCatalog.setBookmarkTagMembership.description,
+    inputSchema: toolCatalog.setBookmarkTagMembership.inputSchema,
+    outputSchema: toolCatalog.setBookmarkTagMembership.outputSchema,
+    annotations: toolCatalog.setBookmarkTagMembership.annotations,
+  }, async (args, context) => {
+    try {
+      const result = await executor[toolCatalog.setBookmarkTagMembership.name](args, {signal: context.mcpReq.signal});
+      return {...toolSuccess(result), isError: result.status !== 'success'};
+    } catch (error) { return toolError(error); }
+  });
+  server.registerTool(toolCatalog.createTag.name, {
+    description: toolCatalog.createTag.description,
+    inputSchema: toolCatalog.createTag.inputSchema,
+    outputSchema: toolCatalog.createTag.outputSchema,
+    annotations: toolCatalog.createTag.annotations,
+  }, async (args, context) => {
+    try {
+      const result = await executor[toolCatalog.createTag.name](args, {signal: context.mcpReq.signal});
+      return {...toolSuccess(result), isError: result.status !== 'success'};
+    } catch (error) { return toolError(error); }
+  });
+  server.registerTool(toolCatalog.createTagPath.name, {
+    description: toolCatalog.createTagPath.description,
+    inputSchema: toolCatalog.createTagPath.inputSchema,
+    outputSchema: toolCatalog.createTagPath.outputSchema,
+    annotations: toolCatalog.createTagPath.annotations,
+  }, async (args, context) => {
+    try {
+      const result = await executor[toolCatalog.createTagPath.name](args, {signal: context.mcpReq.signal});
+      return {...toolSuccess(result), isError: result.status !== 'success'};
+    } catch (error) { return toolError(error); }
+  });
+  server.registerTool(toolCatalog.updateTag.name, {
+    description: toolCatalog.updateTag.description,
+    inputSchema: toolCatalog.updateTag.inputSchema,
+    outputSchema: toolCatalog.updateTag.outputSchema,
+    annotations: toolCatalog.updateTag.annotations,
+  }, async (args, context) => {
+    try {
+      const result = await executor[toolCatalog.updateTag.name](args, {signal: context.mcpReq.signal});
+      return {...toolSuccess(result), isError: result.status !== 'success'};
+    } catch (error) { return toolError(error); }
+  });
+  server.registerTool(toolCatalog.previewDeleteTag.name, {
+    description: toolCatalog.previewDeleteTag.description,
+    inputSchema: toolCatalog.previewDeleteTag.inputSchema,
+    outputSchema: toolCatalog.previewDeleteTag.outputSchema,
+    annotations: toolCatalog.previewDeleteTag.annotations,
+  }, async (args, context) => {
+    try {
+      const result = await executor[toolCatalog.previewDeleteTag.name](args, {signal: context.mcpReq.signal});
+      return {...toolSuccess(result)};
+    } catch (error) { return toolError(error); }
+  });
+  server.registerTool(toolCatalog.deleteTag.name, {
+    description: toolCatalog.deleteTag.description,
+    inputSchema: toolCatalog.deleteTag.inputSchema,
+    outputSchema: toolCatalog.deleteTag.outputSchema,
+    annotations: toolCatalog.deleteTag.annotations,
+  }, async (args, context) => {
+    try {
+      const result = await executor[toolCatalog.deleteTag.name](args, {signal: context.mcpReq.signal});
+      return {...toolSuccess(result), isError: result.status !== 'success'};
+    } catch (error) { return toolError(error); }
+  });
+
   return server;
 }
 
@@ -213,6 +324,16 @@ function isToolExecutor(
 
 export function createBridgeExecutor(bridge: BridgeService): ToolExecutor {
   return {
+    [toolCatalog.createBookmark.name]: ({instanceId, ...payload}, {signal}) => bridge.libraryOperation(instanceId, 'bookmarks.create', payload, signal),
+    [toolCatalog.updateBookmark.name]: ({instanceId, ...payload}, {signal}) => bridge.libraryOperation(instanceId, 'bookmarks.update', payload, signal),
+    [toolCatalog.deleteBookmark.name]: ({instanceId, ...payload}, {signal}) => bridge.libraryOperation(instanceId, 'bookmarks.delete', payload, signal),
+    [toolCatalog.replaceBookmarkTags.name]: ({instanceId, ...payload}, {signal}) => bridge.libraryOperation(instanceId, 'bookmarks.replaceTags', payload, signal),
+    [toolCatalog.setBookmarkTagMembership.name]: ({instanceId, ...payload}, {signal}) => bridge.libraryOperation(instanceId, 'bookmarks.setTagMembership', payload, signal),
+    [toolCatalog.createTag.name]: ({instanceId, ...payload}, {signal}) => bridge.libraryOperation(instanceId, 'tags.create', payload, signal),
+    [toolCatalog.createTagPath.name]: ({instanceId, ...payload}, {signal}) => bridge.libraryOperation(instanceId, 'tags.createPath', payload, signal),
+    [toolCatalog.updateTag.name]: ({instanceId, ...payload}, {signal}) => bridge.libraryOperation(instanceId, 'tags.update', payload, signal),
+    [toolCatalog.previewDeleteTag.name]: ({instanceId, ...payload}, {signal}) => bridge.libraryOperation(instanceId, 'tags.previewDelete', payload, signal),
+    [toolCatalog.deleteTag.name]: ({instanceId, ...payload}, {signal}) => bridge.libraryOperation(instanceId, 'tags.delete', payload, signal),
     [toolCatalog.searchBookmarks.name]: ({instanceId, ...payload}, {signal}) => bridge.searchBookmarks(instanceId, payload, signal),
     [toolCatalog.searchTags.name]: ({instanceId, ...payload}, {signal}) => bridge.searchTags(instanceId, payload, signal),
     [toolCatalog.devicesList.name]: (args, { signal }) =>

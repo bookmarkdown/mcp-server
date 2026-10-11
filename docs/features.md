@@ -1,7 +1,7 @@
 ---
 title: "Available Features"
 description: "BookMarkdown MCP daemon、Streamable HTTP、browser window/tab 與書籤／標籤查詢工具及整合狀態。"
-ms.date: 2026-10-09
+ms.date: 2026-10-11
 ms.topic: reference
 ---
 
@@ -55,6 +55,58 @@ Agent 共用認證 token、browser instances 與工具權限。沒有每個 agen
 
 instance registry 只存在 daemon 記憶體中，daemon 重啟後會清空。`includeOffline: false` 只會篩除已知的離線 instance，不會探索尚未連線的瀏覽器設定檔。篩選後沒有 instance 時，`0.4.0` 回 `EXTENSION_NOT_CONNECTED` 工具錯誤，並非空清單；即使 `includeTabCounts: false` 也相同。
 
+## 書籤多標籤與樹狀標籤 CRUD
+
+2026-10-11 更新的 extension 與 sibling server source（package 版本欄位 `0.5.0`）
+新增下列 10 個工具，需兩端重新建置，重啟 Server 並重新載入擴充套件。
+這些修改尚未發布 npm；已安裝的同版本套件不代表包含本次 source 修改。
+每個工具都要求 `devices.list` 回傳的 `instanceId`。
+
+| 工具 | 其餘必要參數 | 行為 |
+| --- | --- | --- |
+| `bookmarks.create` | `input: {contentUrl, title, description, tagIds?}` | 原子新增內容與多標籤；重複 URL 不覆寫 |
+| `bookmarks.update` | `id`, `input` 同上 | 更新內容；省略 tagIds 保留標籤，提供則全部取代 |
+| `bookmarks.delete` | `id` | 刪除書籤及其關聯 |
+| `bookmarks.replaceTags` | `bookmarkId`, `tagIds` | 替換全部標籤 |
+| `bookmarks.setTagMembership` | `bookmarkId`, `tagId`, `assigned` | 新增／移除單一關聯 |
+| `tags.create` | `input: {name, color, parentId}` | parentId 為 null 建立根節點 |
+| `tags.createPath` | `input: {path, color}` | 以 `::` 分段建立完整路徑，回傳葉節點 ID |
+| `tags.update` | `id`, `input: {name, color, parentId}` | 改名、改色、移動；保留節點 ID 與書籤關聯 |
+| `tags.previewDelete` | `id` | 唯讀計算子標籤、後代及書籤影響範圍 |
+| `tags.delete` | `id`, `strategy: "subtree" 或 "promote"` | 兩種策略均保留書籤本體 |
+
+先用 `tags.search` 找到 ID，再新增同時具有兩個標籤的書籤：
+
+```json
+{
+  "name": "bookmarks.create",
+  "arguments": {
+    "instanceId": "<devices.list 回傳的 UUID>",
+    "input": {
+      "contentUrl": "https://example.com/react-drag",
+      "title": "React 拖曳筆記",
+      "description": "",
+      "tagIds": [12, 34]
+    }
+  }
+}
+```
+
+空字串可用於 title、description、color。tagIds 最多 500 個，重複 ID 會去重；
+空陣列恢復未分類等既有分類規則。MCP 編碼後參數限制 12,000 bytes，
+URL／description 最多 8,192 字元、title 最多 4,096 字元；過大輸入拒絕而非截斷。
+`tags.delete` 的 subtree 移除整棵標籤子樹及其關聯；promote 將子標籤提升一層，
+並依既有規則將直接書籤關聯交給父節點。內建標籤不可改名、移動或刪除。
+
+成功回傳 `{status: "success", value: {id}}`；duplicate／invalid／conflict 以
+MCP `isError: true` 回傳結構化結果。逾時、取消或斷線不代表交易一定未提交，
+寫入不自動重送，應先查詢目前資料再決定是否重試。契約來源為 `src/bridge/library-contracts.ts` 與 companion extension 的 `library-rpc.ts`。
+
+本次已驗證實際 HTTP MCP 的 10 個操作、書籤多標籤交易、標籤改名與移動、
+兩種刪除策略、非法 ID／循環拒絕，以及 MCP 寫入後 UI 讀回、UI 編輯後 MCP 讀回。
+書籤 UI 新增／編輯／選擇多標籤／刪除涵蓋 en、zh_TW、light、dark，
+並檢視 390px／1440px 截圖。這不是第三方 MCP host 產品認證。
+
 ## 連線與錯誤
 
 daemon 預設在 `127.0.0.1:38471` 接受 WebSocket，MCP 在 `127.0.0.1:38472/mcp`。CLI 首次建立設定檔與兩組 token，本機管理頁提供設定、token 遮蔽／複製及多裝置清單。開啟區網後允許私有網路 HTTP／WS，不強制 WSS；管理頁仍限本機。Production extension ID allowlist 選填，development 接受所有相容 ID；兩種模式都保留 Origin、hello 身分與 token 檢查。設定保存需重啟，詳見[設定指南](settings.md)。Listener 必須同時成功啟動，失敗會清理資源。
@@ -63,9 +115,15 @@ daemon 預設在 `127.0.0.1:38471` 接受 WebSocket，MCP 在 `127.0.0.1:38472/m
 
 HTTP 缺少或不正確的 Bearer token 回 `401`，非法 Host/Origin 回 `403`，body 超限回 `413`，同時處理中的 HTTP 請求超限回 `503`。工具錯誤包含 `EXTENSION_NOT_CONNECTED`、`UNSUPPORTED_OPERATION`、`REQUEST_TIMEOUT`、`REQUEST_CANCELLED`、`EXTENSION_DISCONNECTED`、`EXTENSION_OPERATION_FAILED`、`BRIDGE_BUSY` 與 `INVALID_EXTENSION_RESPONSE`。取消或斷線不會自動重送瀏覽器操作。
 
-WebSocket hello 使用 protocol version `2`。一般註冊要求 app ID `bmd-extension`、browser `chrome`、UUID instance ID、合法裝置別名及與 Origin 相符的 extension ID；正式模式若設定非空 allowlist，ID 必須符合清單。Probe 可省略別名且不會註冊 instance。Browser RPC 接受上述兩個唯讀查詢，以及 `browser.countOpenTabs`、`browser.countOpenWindows`、`browser.listTabs`、`browser.openTab`、`browser.closeTab` 與 `browser.moveTab`，並在呼叫前檢查 instance capabilities。request ID 用於將回覆配對到原始連線及呼叫。
+WebSocket hello 使用 protocol version `2`。一般註冊要求 app ID `bmd-extension`、browser `chrome`、UUID instance ID、合法裝置別名及與 Origin 相符的 extension ID；正式模式若設定非空 allowlist，ID 必須符合清單。Probe 可省略別名且不會註冊 instance。Browser RPC 接受上述兩個唯讀查詢、10 個 library 操作，以及 `browser.countOpenTabs`、`browser.countOpenWindows`、`browser.listTabs`、`browser.openTab`、`browser.closeTab` 與 `browser.moveTab`，並在呼叫前檢查 instance capabilities。request ID 用於將回覆配對到原始連線及呼叫。
 
 ## 驗證狀態與後續工作
+
+2026-10-11 最後重驗共有 55 項 Node 測試：52 項完成驗證、3 項平台條件略過。
+其中兩項連線測試在整批執行出現握手逾時／連線重設，單獨重跑兩項均通過；
+這不代表連線測試已完全沒有不穩定性。Companion 的 103 項 Chrome 矩陣經整批與補跑完成，
+包含更新能力數量預期後的 loopback／LAN 串接。
+
 
 此 repository 的 Node.js 測試使用 HTTP MCP 與 WebSocket client，涵蓋認證、路由、取消、併發隔離、啟動 rollback、關閉及 browser operation contract。Linux WSS 測試在 Windows 略過。2026-10-09 在 companion extension repository 以 npm 正式版 `0.4.0`、BMD `0.0.1`、Windows、Node.js `24.11.0`、Playwright `1.63.0`、Chrome for Testing `153.0.8010.12` 驗證七個工具、loopback 與同機私有網卡 WS 配對、實際分頁異動及重連。測試 host 為 `bmd-chrome-integration-test/1.0.0` HTTP JSON-RPC client，不能替代指定產品 host 驗收。詳細證據與未測項目見[整合指南](browser-integration.md)。
 
