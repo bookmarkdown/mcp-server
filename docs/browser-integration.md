@@ -1,11 +1,60 @@
 ---
 title: "瀏覽器整合指南"
 description: "瀏覽器 extension 連線至 BookMarkdown MCP Server 本機或私有區網 WebSocket 協定與 client 範例。"
-ms.date: 2026-10-09
+ms.date: 2026-10-11
 ms.topic: how-to
 ---
 
+## Library CRUD contract (source update 2026-10-11)
+
+The updated source build (package version field 0.5.0) adds 10 library operations
+to the existing WebSocket v2 protocol. Both server and companion extension must
+be rebuilt and restarted/reloaded; this change is not an npm release. Tool names
+and wire operation names are identical. MCP arguments include instanceId; the
+WebSocket payload omits it. The strict allowlist and result schemas live in
+[library-contracts.ts](../src/bridge/library-contracts.ts). Argument fields and
+examples are in [features (Traditional Chinese)](features.md#書籤多標籤與樹狀標籤-crud).
+
+New capabilities: bookmarks.create, bookmarks.update, bookmarks.delete,
+bookmarks.replaceTags, bookmarks.setTagMembership, tags.create, tags.createPath,
+tags.update, tags.previewDelete and tags.delete. A client advertises only
+implemented operations; query-only clients return UNSUPPORTED_OPERATION for
+writes. The existing pairing authorizes the selected instance's library tools.
+
+Bookmark create/update accepts optional input.tagIds. Omission preserves existing
+memberships on update; an explicit array replaces them in the same transaction as
+the content edit. Empty arrays use the extension's category fallback. Duplicate
+URLs and invalid tags do not partially update data. Tag update preserves stable
+IDs; deleting a subtree or promoting children preserves bookmark entities.
+
+Mutations return {status: 'success', value: {id}} or a duplicate, invalid
+(field/message), or conflict (message) result. Domain failures use a successful
+browser RPC envelope but MCP isError: true with structuredContent. Unexpected
+database failures use the existing sanitized operation error. previewDelete is
+read-only and returns four nonnegative counts. Input IDs are positive safe
+integers; tag arrays contain at most 500 entries. Encoded tool arguments/payloads
+are limited to 12000 UTF-8 bytes, leaving room in the extension request envelope.
+The connection manager still validates responses against the originating request.
+
+Never automatically retry a write after timeout, cancellation or disconnect: its
+transaction may already have committed. Read current state before retrying.
+No per-agent permission isolation or database SQL tool is introduced.
+
+Verified with the existing Windows/Chrome HTTP harness on 2026-10-11: the server's
+55 Node tests yielded 52 passes and 3 platform skips; typecheck/build passed.
+Companion Chrome acceptance called all 10 operations through real HTTP MCP and
+WebSocket, read writes back in Options, and read UI edits back via MCP. Tests cover
+multi-tag writes, rename/move, cycle rejection, promote/subtree deletion and error
+rollback. This does not certify a specific third-party MCP host.
+
 ## 狀態與驗證範圍
+
+Final repeated validation: two existing connection tests failed with handshake
+timeout/connection reset in the combined Node run; both passed isolated reruns.
+This timing/connection stability limitation remains recorded. The companion
+extension completed its 103 Chrome scenarios across the bounded full run and
+targeted follow-up, including loopback/LAN with the new capabilities.
+
 
 2026-10-09 已使用 npm 發布的 `@bookmarkdown/mcp-server@0.4.0`、BMD extension `0.0.1` source build（基線 `666c2a5` 加上 LAN WS 修改）、Windows、Node.js `24.11.0`、npm `11.4.1`、Playwright `1.63.0` 與 Chrome for Testing `153.0.8010.12` 完成本機與同機私有網卡的真實 WS 串接。Host 是 `bmd-chrome-integration-test/1.0.0` 的 HTTP JSON-RPC client，MCP initialize 協定為 `2025-11-25`，WebSocket 協定為 `2`；並非 Codex、Claude Desktop 或 VS Code 的產品測試。
 
@@ -56,7 +105,7 @@ Server 設定保存與 token 重建後，重啟才生效。重啟前複製／顯
 
 同機串接評估為低到中：已安裝 Node 與 extension 時，不需固定 ID、ENV 或憑證，但需要分辨兩組 URL/token，並完成測試、保存、啟用。新手或另一種 MCP host 為中等：涉及 Node 安裝、終端機生命週期與 HTTP/Bearer 支援。可信任 LAN 串接為中等：啟用 server LAN、重啟、使用私有 IPv4 的 WS URL 即可，不需憑證；跨實體裝置仍需確認防火牆與路由。這些是流程的質性評估，沒有做新手耗時或可用性研究。
 
-優點：單一 daemon 共用多裝置／agent、extension 主動連線、獨立 tokens、穩定 UUID、受限工具與 schema、逾時／斷線不重播異動。代價：需維持 daemon 執行、token 為本機明文設定、agent 共用權限與額度、沒有同一分頁操作鎖；只提供七個分頁／裝置工具，未提供 MCP 書籤／標籤 CRUD 或跨裝置搬移瀏覽器 session。
+優點：單一 daemon 共用多裝置／agent、extension 主動連線、獨立 tokens、穩定 UUID、受限工具與 schema、逾時／斷線不重播異動。代價：需維持 daemon 執行、token 為本機明文設定、agent 共用權限與額度、沒有同一分頁操作鎖；現行 source 共提供 19 個工具，包含分頁／裝置、書籤／標籤查詢與 CRUD；未提供跨裝置搬移瀏覽器 session。
 
 以下 P1/P2 已加入目前 source，維持本機／LAN WS 與現有認證邊界：
 
