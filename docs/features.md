@@ -1,7 +1,7 @@
 ---
 title: "Available Features"
-description: "BookMarkdown MCP daemon、Streamable HTTP、browser window/tab 與書籤／標籤查詢工具及整合狀態。"
-ms.date: 2026-10-11
+description: "BookMarkdown MCP daemon、Streamable HTTP、browser window/tab、書籤／標籤查詢與 CRUD 工具及整合狀態。"
+ms.date: 2026-10-12
 ms.topic: reference
 ---
 
@@ -20,6 +20,10 @@ Daemon 沒有固定 agent 數量配額；所有 agent 共用預設 `32` 個處�
 Agent 共用認證 token、browser instances 與工具權限。沒有每個 agent 的權限隔離或分頁獨占；同時修改同一分頁可能互相影響，應由 agent／host 協調。
 
 ## MCP 工具
+
+目前 source 提供 19 個 MCP 工具：1 個裝置清單、6 個瀏覽器操作、
+2 個書籤／標籤唯讀查詢，以及 10 個 library 操作（9 個寫入與 1 個刪除預覽）。
+以下描述 source 功能；已安裝 npm 套件是否包含這些工具，需依實際發布內容確認。
 
 | 工具 | 輸入 | 行為 |
 | --- | --- | --- |
@@ -43,7 +47,7 @@ Agent 共用認證 token、browser instances 與工具權限。沒有每個 agen
 * `bookmarks.search` 接受 UUID `instanceId`、`keywords`、`tagIds`、`search`、`limit` 與 `offset`。每個關鍵詞與選定 ID 都必須符合（AND）；關鍵詞比對完整名稱與祖先，ID 包含子樹。不同資料夾的同名標籤以 ID 區分；已刪除 ID 回傳零筆。`search` 額外比對標題／URL，最多 1024 字元。keywords／tagIds 各最多 50 個，關鍵詞每個最多 256 字元。
 * AI host 先從自然語言取得實際標籤關鍵詞，可用 `tags.search` 探索名稱／ID，再呼叫 `bookmarks.search`，例如 `{"instanceId":"<UUID>","keywords":["React","拖曳"]}`。Extension 執行確定的資料庫查詢，沒有內建 AI，也不展開同義詞。
 * 兩個工具每頁最多 10 筆，結果包含 totalCount、nextOffset 與 queriedAt。書籤 metadata 包含 id、title、url、description 與最多 10 個標籤；文字和整頁有大小上限，truncated 表示縮短文字或省略標籤。沿 nextOffset 分頁，不要假設每頁一定滿 10 筆；名稱／路徑截短時使用 ID 查詢。
-* 工具標示 readOnlyHint；沿用 token、Origin、instance capabilities、request ID、逾時與取消契約。沒有新增書籤／標籤寫入、SQL 或頁面內容工具，也不記錄查詢或書籤 payload。
+* 這兩個查詢工具標示 readOnlyHint；沿用 token、Origin、instance capabilities、request ID、逾時與取消契約。不提供 SQL 或頁面內容工具，也不記錄查詢或書籤 payload。書籤／標籤寫入另見下方 CRUD 章節。
 
 工具 schema、SDK MCP 呼叫、認證 WebSocket 路由與完整 server 建置／型別／daemon 測試已驗證。Companion extension 的 Chrome 驗收使用正式 daemon 的 HTTP MCP，涵蓋標籤探索、關鍵詞及 ID 交集、標題篩選、分頁、改名同步、非法參數與停用後拒絕查詢。這不是特定產品 host 的相容性認證。
 
@@ -57,7 +61,7 @@ instance registry 只存在 daemon 記憶體中，daemon 重啟後會清空。`i
 
 ## 書籤多標籤與樹狀標籤 CRUD
 
-2026-10-11 更新的 extension 與 sibling server source（package 版本欄位 `0.5.0`）
+2026-10-11 更新的 companion extension 與本 repository source（package 版本欄位 `0.5.0`）
 新增下列 10 個工具，需兩端重新建置，重啟 Server 並重新載入擴充套件。
 這些修改尚未發布 npm；已安裝的同版本套件不代表包含本次 source 修改。
 每個工具都要求 `devices.list` 回傳的 `instanceId`。
@@ -98,9 +102,12 @@ URL／description 最多 8,192 字元、title 最多 4,096 字元；過大輸入
 `tags.delete` 的 subtree 移除整棵標籤子樹及其關聯；promote 將子標籤提升一層，
 並依既有規則將直接書籤關聯交給父節點。內建標籤不可改名、移動或刪除。
 
-成功回傳 `{status: "success", value: {id}}`；duplicate／invalid／conflict 以
-MCP `isError: true` 回傳結構化結果。逾時、取消或斷線不代表交易一定未提交，
-寫入不自動重送，應先查詢目前資料再決定是否重試。契約來源為 `src/bridge/library-contracts.ts` 與 companion extension 的 `library-rpc.ts`。
+9 個寫入工具成功時回傳 `{status: "success", value: {id}}`；duplicate／invalid／conflict 以
+MCP `isError: true` 回傳結構化結果。`tags.previewDelete` 為唯讀工具，回傳
+`directChildCount`、`descendantTagCount`、`directBookmarkCount` 與 `subtreeBookmarkCount`，
+不使用寫入結果格式。逾時、取消或斷線不代表交易一定未提交，
+寫入不自動重送，應先查詢目前資料再決定是否重試。Server 契約來源為
+[library-contracts.ts](../src/bridge/library-contracts.ts)；companion extension 實作另行維護。
 
 本次已驗證實際 HTTP MCP 的 10 個操作、書籤多標籤交易、標籤改名與移動、
 兩種刪除策略、非法 ID／循環拒絕，以及 MCP 寫入後 UI 讀回、UI 編輯後 MCP 讀回。
@@ -129,7 +136,7 @@ WebSocket hello 使用 protocol version `2`。一般註冊要求 app ID `bmd-ext
 
 更新後的 companion extension 對網路錯誤／hello 逾時使用 1／2／4／8／16／30 秒退避並显示下一次倒數；精確序列、停用清理及拒絕認證後停止已由單元測試驗證。重連不重送 browser RPC。長時間 MV3 閒置及 sleep/wake 尚未驗證。
 
-Server `0.4.1` 已包含角色化配對引導、秘密占位符樣板、操作旁提示、執行中／待重啟 token 狀態、重啟後客戶端更新提醒與三段唯讀健康檢查。這些功能不屬於 npm `0.4.0` 的歷史驗證範圍。`EXTENSION_NOT_CONNECTED`／`isError` 契約維持不變，訊息提供先啟用套件的步驟。健康檢查不增加七個工具之外的 MCP 工具，詳見[設定指南](settings.zh-TW.md)。
+Server `0.4.1` 已包含角色化配對引導、秘密占位符樣板、操作旁提示、執行中／待重啟 token 狀態、重啟後客戶端更新提醒與三段唯讀健康檢查。這些功能不屬於 npm `0.4.0` 的歷史驗證範圍。`EXTENSION_NOT_CONNECTED`／`isError` 契約維持不變，訊息提供先啟用套件的步驟。健康檢查本身不新增 MCP 工具，詳見[設定指南](settings.zh-TW.md)。
 
 Server `0.4.1` 也已包含「連接 Chrome 套件」與「複製配對連結」，可選擇執行中的本機／LAN WS 端點，帶入套件的未儲存草稿並提示測試，再由使用者儲存並啟用。目標 ID 預填為使用者指定值，可改為開發版實際 ID；不修改 allowlist，也不新增 MCP 工具。需搭配相容的新版套件，詳見[一鍵配對](settings.zh-TW.md#一鍵套件配對)。
 
