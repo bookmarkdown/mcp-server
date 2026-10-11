@@ -4,26 +4,11 @@
 
 BookMarkdown MCP Server 讓 agent 直接透過 MCP Streamable HTTP 呼叫本機 daemon。Daemon 保留 browser extension WebSocket bridge；stdio proxy 與本機 IPC 已移除。
 
-> [!IMPORTANT]
-> MCP host 必須使用 Streamable HTTP；舊的 stdio proxy 已移除。Server `0.4.0` 與 BMD `0.0.1` source build 已在 Windows、Chrome 153 通過 loopback 與同機私有網卡 WS 整合測試，使用自訂 HTTP JSON-RPC 測試 host。指定 MCP 產品與遠端 WSS 尚未驗證，詳見[整合證據](docs/browser-integration.md)。
-
-Server `0.4.1` 已包含配對引導、執行中／待生效 token、重啟後更新客戶端提醒與三段唯讀連線檢查。本機／私有 LAN 可使用 WS，不需憑證；相關功能需搭配相容的新版套件。歷史 `0.4.0` 整合證據不代表所有後續版本都已完成相同驗證。
-
-Server `0.4.1` 也已包含一鍵配對：確認套件 ID 與執行中 WS 端點，開啟套件帶入草稿、測試，再明確儲存並啟用；也可複製配對連結貼到另一台 LAN 電腦的 Chrome 網址列。此流程需搭配相容的新版套件，詳見[一鍵配對設定](docs/settings.zh-TW.md#一鍵套件配對)。
+目前仍在 1.0 前的開發階段，功能與介面可能調整。
 
 ## 功能
 
-Server 提供以下 MCP tools：
-
-| 工具 | 說明 |
-| --- | --- |
-| `devices.list` | 列出執行中 daemon 已知的 extension instances，並可選擇查詢分頁數。 |
-| `browser.countOpenTabs` | 計算指定連線 instance 一般視窗中的分頁數。 |
-| `browser.countOpenWindows` | 計算指定連線 instance 的一般視窗數。 |
-| `browser.listTabs` | 分頁回傳分頁 metadata，每次最多 10 個分頁。 |
-| `browser.openTab` | 在一般視窗開啟分頁。 |
-| `browser.closeTab` | 關閉一般視窗中的分頁。 |
-| `browser.moveTab` | 將分頁移至另一個一般視窗。 |
+Daemon 連接 agent 與相容的瀏覽器套件，提供有明確範圍的 MCP 工具。配對與伺服器設定透過本機管理頁操作。
 
 分頁標題與 URL 可能包含敏感資訊。Server 不讀取頁面內容；extension 預期會排除 incognito 視窗與分頁。操作結果不明時，不會自動重送分頁變更操作。
 
@@ -36,20 +21,15 @@ Server 提供以下 MCP tools：
 * npm
 * 相容的 companion browser extension，另行維護
 
-## 從 npm 安裝
+## 快速啟動
 
-不需全域安裝，即可執行已發布的 CLI：
+不需全域安裝，直接啟動 daemon：
 
 ```bash
 npx -y @bookmarkdown/mcp-server@latest
 ```
 
-新版 CLI 首次啟動會自動建立設定檔與 token，不需設定 ENV。也可以選擇全域安裝：
-
-```bash
-npm install --global @bookmarkdown/mcp-server
-bookmarkdown-mcp-server
-```
+首次啟動會建立設定檔與兩組獨立 token，不需預設 ENV 或 extension ID。保持終端機開啟，按 Ctrl+C 停止。若要全域安裝，先執行 `npm install --global @bookmarkdown/mcp-server`，再執行 `bookmarkdown-mcp-server`。
 
 ## 從原始碼安裝
 
@@ -58,29 +38,20 @@ git clone https://github.com/bookmarkdown/mcp-server.git
 cd mcp-server
 npm ci
 npm run build
-```
-
-建置後直接執行 `npm start`。
-
-## 啟動 daemon
-
-```bash
 npm start
 ```
 
-全域安裝使用 `bookmarkdown-mcp-server`。不需預先設定 ENV 或 extension ID；首次啟動會建立使用者設定檔，以及各自獨立的 MCP 與配對 token，之後沿用。
+原始碼修改後，重新建置並重啟 daemon。
 
-開啟終端機提示的本機管理頁（預設 `http://127.0.0.1:38472/`）。頁面以緊湊的 **BookMarkdown MCP** 標題列顯示 BMD logo 與即時狀態，提供連線 URL、遮蔽的 token 顯示／複製、已配對裝置清單，以及伺服器設定。設定保存與 token 重建需重啟後生效。
+## 連接套件與 agent
 
-套件使用 WS 與配對 token；Agent 使用 HTTP 與獨立 Bearer token。新版 BMD 先「測試」，再「儲存並啟用」，probe 成功不代表已註冊。管理頁明確點選後驗證 HTTP initialize／工具目錄、裝置註冊及唯讀分頁計數；token 顯示／複製在重啟前仍取執行中憑證。提醒保存範圍與限制見[設定指南](docs/settings.zh-TW.md)。
+1. 在啟動 server 的電腦開啟終端機列出的設定頁，預設為 `http://127.0.0.1:38472/`。
+2. 按「連接 Chrome 套件」配對相容的 BMD，或手動填入 WebSocket URL 與配對 token。先測試，再「儲存並啟用」；probe 成功不代表已註冊。
+3. 複製 Agent 的 HTTP URL 與另一組 MCP token，填入下方 host 設定。
 
-瀏覽器請開啟根路徑 `/`；`/mcp` 是 agent 的認證端點，`38471` 是套件 WebSocket port。管理頁須在啟動 server 的電腦開啟。修改或重新建置後，先停止舊程序，再執行 `npm start`。
+設定保存與 token 重建需重啟後生效；此前顯示／複製仍使用執行中的憑證。區網、設定檔路徑、ENV、配對連結與連線檢查詳見[設定指南](docs/settings.zh-TW.md)。
 
-Windows 設定存於 `%LOCALAPPDATA%\BookMarkdown\mcp-server\config.json`；Linux 與 macOS 使用各自的使用者設定目錄。ENV 可覆寫設定，`BOOKMARKDOWN_CONFIG_FILE` 可指定檔案。詳細路徑、欄位、ENV 與重啟流程見[設定指南](docs/settings.zh-TW.md)。
-
-預設只接受本機連線。在網頁開啟區網、儲存並重啟後，可信任 LAN 的 agent 使用顯示的私有 IP HTTP URL，BMD 使用 `ws://<server-private-ip>:38471/` 與獨立配對 token。更新後的 BMD source build 已接受 RFC1918 IPv4 WS，不需憑證；WSS 為選配，管理頁仍僅限本機。須載入更新後的套件建置，詳見[設定指南](docs/settings.zh-TW.md)。
-
-保持終端機執行，按 Ctrl+C 停止。Token 不會寫入 log，請勿放入 HTTP／WS 傳輸 URL、命令列參數或 source control。一鍵配對連結是使用者明確操作的例外，僅在套件 URL fragment 帶入配對 token；請只交給要配對的瀏覽器。
+請勿將 token 放入傳輸 URL、命令列參數或 source control。含憑證的配對連結只交給要配對的瀏覽器。
 
 ## 設定 MCP host
 
@@ -98,17 +69,9 @@ Windows 設定存於 `%LOCALAPPDATA%\BookMarkdown\mcp-server\config.json`；Linu
 }
 ```
 
-MCP host 不會啟動 daemon。舊的 proxy `command`／`args` 設定需改為 HTTP URL；`proxy` 子命令與 `BOOKMARKDOWN_IPC_PIPE_NAME` 已移除。Daemon 離線時 initialize、tools/list 與 tools/call 都無法連線。HTTP 使用無狀態 JSON 回覆，不建立 MCP session；GET SSE、DELETE 與其他非 POST 方法回 `405`，不支援通知串流或續傳。操作結果不明時不得自動重送。
+將 token 佔位值換成管理頁上執行中的 MCP token。區網 client 改用顯示的私有 IP HTTP URL。Host 不會啟動 daemon，請另外保持 daemon 執行；舊 stdio `command`／`args` 設定改用 HTTP。
 
-從管理頁複製目前執行中的 MCP token，填入上方 Authorization header；預設 port 為 `38472`。區網模式改用管理頁顯示的私有 IP URL。MCP `/mcp` 每次請求都驗證 Bearer、Host 與 Origin（若有），不提供 CORS。MCP 與套件配對 token 分開產生。
-
-Daemon 未設定 agent 數量配額；所有 agent 共用預設 **32 個處理中的 HTTP 請求**額度，包含 initialize、tools/list 與 tools/call。`BOOKMARKDOWN_MAX_PENDING_REQUESTS` 可設為 **1–256** 的整數，修改後需重啟 daemon。超限的 HTTP 請求回 `503`，附帶 `Retry-After: 1`。閒置 agent 不占用處理中的請求額度；實際容量也取決於系統資源與工作負載。
-
-Bridge 另以相同設定限制等待中的 browser RPC，超限時工具回 `BRIDGE_BUSY`。單次工具呼叫，例如查詢分頁數的 devices.list，可能送出多個 browser RPC。`BOOKMARKDOWN_MAX_CONNECTIONS` 預設 **8**，限制的是 extension WebSocket 連線數。
-
-每個 HTTP 請求有獨立 MCP server 與 transport，因此不同 agent 可使用相同 MCP JSON-RPC ID。每個 browser RPC 則由 daemon 另產生 UUID `requestId`；extension 回覆須符合該 UUID 與原始 WebSocket 連線，daemon 才會透過原始 HTTP 請求回覆對應 agent。回覆可以不依送出順序抵達，詳見[請求配對與共享狀態](docs/architecture.md#多-agent-請求配對與共享狀態)。
-
-所有 agent 共用 MCP token、browser instances 與工具權限。回覆分流沒有提供每個 agent 的權限隔離、分頁獨占或跨 agent 操作順序保證；同時修改同一分頁可能影響彼此，應由 agent 或 host 協調衝突操作。
+所有 agent 共用憑證、browser instances、權限與請求額度，沒有分頁獨占。請協調衝突的分頁操作，詳見[請求配對與上限](docs/architecture.md#多-agent-請求配對與共享狀態)。
 
 ## 安全與隱私
 

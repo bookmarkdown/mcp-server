@@ -1,3 +1,4 @@
+import {libraryOperationContracts} from '../bridge/library-contracts.js';
 import * as z from 'zod/v4';
 import {
   searchBookmarksPayloadSchema,
@@ -139,7 +140,71 @@ export const searchTagsTool = {
   outputSchema: searchTagsResultSchema,
 } as const;
 
+export const libraryTools = {
+  createBookmark: {
+    name: 'bookmarks.create', description: "Create a saved HTTP/HTTPS bookmark with optional tagIds in one atomic transaction. Discover IDs with tags.search. Duplicate URL returns duplicate without changing existing content or tags. Mutations are never automatically retried. After a timeout or disconnect, query the current state before deciding whether to retry.",
+    inputSchema: libraryOperationContracts['bookmarks.create'].payload.safeExtend({instanceId: z.string().uuid()}),
+    outputSchema: libraryOperationContracts['bookmarks.create'].result,
+    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false},
+  },
+  updateBookmark: {
+    name: 'bookmarks.update', description: "Replace bookmark URL, title and description by stable ID. Optional tagIds replaces all memberships atomically; omitted preserves tags, [] restores the uncategorized fallback. Mutations are never automatically retried. After a timeout or disconnect, query the current state before deciding whether to retry.",
+    inputSchema: libraryOperationContracts['bookmarks.update'].payload.safeExtend({instanceId: z.string().uuid()}),
+    outputSchema: libraryOperationContracts['bookmarks.update'].result,
+    annotations: {readOnlyHint: false, destructiveHint: true, openWorldHint: false},
+  },
+  deleteBookmark: {
+    name: 'bookmarks.delete', description: "Permanently delete one saved bookmark and all its memberships by ID. Mutations are never automatically retried. After a timeout or disconnect, query the current state before deciding whether to retry.",
+    inputSchema: libraryOperationContracts['bookmarks.delete'].payload.safeExtend({instanceId: z.string().uuid()}),
+    outputSchema: libraryOperationContracts['bookmarks.delete'].result,
+    annotations: {readOnlyHint: false, destructiveHint: true, openWorldHint: false},
+  },
+  replaceBookmarkTags: {
+    name: 'bookmarks.replaceTags', description: "Replace all tag memberships for one saved bookmark. Use tags.search to select IDs; [] restores the uncategorized fallback. Mutations are never automatically retried. After a timeout or disconnect, query the current state before deciding whether to retry.",
+    inputSchema: libraryOperationContracts['bookmarks.replaceTags'].payload.safeExtend({instanceId: z.string().uuid()}),
+    outputSchema: libraryOperationContracts['bookmarks.replaceTags'].result,
+    annotations: {readOnlyHint: false, destructiveHint: true, openWorldHint: false},
+  },
+  setBookmarkTagMembership: {
+    name: 'bookmarks.setTagMembership', description: "Assign or remove one tag by ID while retaining other bookmark memberships. Mutations are never automatically retried. After a timeout or disconnect, query the current state before deciding whether to retry.",
+    inputSchema: libraryOperationContracts['bookmarks.setTagMembership'].payload.safeExtend({instanceId: z.string().uuid()}),
+    outputSchema: libraryOperationContracts['bookmarks.setTagMembership'].result,
+    annotations: {readOnlyHint: false, destructiveHint: true, openWorldHint: false},
+  },
+  createTag: {
+    name: 'tags.create', description: "Create one tag under parentId, or a root with parentId null. Names are literal; reserved built-in tags cannot be created. Mutations are never automatically retried. After a timeout or disconnect, query the current state before deciding whether to retry.",
+    inputSchema: libraryOperationContracts['tags.create'].payload.safeExtend({instanceId: z.string().uuid()}),
+    outputSchema: libraryOperationContracts['tags.create'].result,
+    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false},
+  },
+  createTagPath: {
+    name: 'tags.createPath', description: "Create or resolve a root-relative tag path atomically and return its leaf ID. Separate names with ::; escape literal separators with a backslash. Reuses sole sibling matches; ambiguous imported folders require IDs. Mutations are never automatically retried. After a timeout or disconnect, query the current state before deciding whether to retry.",
+    inputSchema: libraryOperationContracts['tags.createPath'].payload.safeExtend({instanceId: z.string().uuid()}),
+    outputSchema: libraryOperationContracts['tags.createPath'].result,
+    annotations: {readOnlyHint: false, destructiveHint: false, openWorldHint: false},
+  },
+  updateTag: {
+    name: 'tags.update', description: "Rename, recolor or move a tag using parentId (null for root). Preserves IDs and bookmark memberships; descendant paths update atomically. Cycles, duplicate siblings and built-in edits are rejected. Mutations are never automatically retried. After a timeout or disconnect, query the current state before deciding whether to retry.",
+    inputSchema: libraryOperationContracts['tags.update'].payload.safeExtend({instanceId: z.string().uuid()}),
+    outputSchema: libraryOperationContracts['tags.update'].result,
+    annotations: {readOnlyHint: false, destructiveHint: true, openWorldHint: false},
+  },
+  previewDeleteTag: {
+    name: 'tags.previewDelete', description: "Count affected children, descendants and bookmark memberships before deleting a tag. Bookmark entities are preserved by both deletion strategies. Mutations are never automatically retried. After a timeout or disconnect, query the current state before deciding whether to retry.",
+    inputSchema: libraryOperationContracts['tags.previewDelete'].payload.safeExtend({instanceId: z.string().uuid()}),
+    outputSchema: libraryOperationContracts['tags.previewDelete'].result,
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false},
+  },
+  deleteTag: {
+    name: 'tags.delete', description: "Delete a tag by ID using an explicit strategy. subtree removes descendant tags and their memberships; promote reparents children and transfers direct memberships to the parent. Both preserve bookmarks and restore category fallbacks; conflicts roll back. Mutations are never automatically retried. After a timeout or disconnect, query the current state before deciding whether to retry.",
+    inputSchema: libraryOperationContracts['tags.delete'].payload.safeExtend({instanceId: z.string().uuid()}),
+    outputSchema: libraryOperationContracts['tags.delete'].result,
+    annotations: {readOnlyHint: false, destructiveHint: true, openWorldHint: false},
+  },
+} as const;
+
 export const toolCatalog = {
+  ...libraryTools,
   searchBookmarks: searchBookmarksTool,
   searchTags: searchTagsTool,
   devicesList: devicesListTool,

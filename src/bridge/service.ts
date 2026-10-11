@@ -1,3 +1,4 @@
+import type {LibraryOperation} from './library-contracts.js';
 import type { BridgeConfig, BridgeConfigResult } from '../config.js';
 import { defaultBridgeLimits } from '../config.js';
 import { ConnectionManager, type InstanceSnapshot } from './connection-manager.js';
@@ -143,6 +144,15 @@ export class BridgeService {
   }
 
   public get instances(): InstanceSnapshot[] { return this.#connections.listInstances(); }
+
+  public async libraryOperation<K extends LibraryOperation>(instanceId: string, operation: K,
+    payload: BrowserOperationPayload<K>, signal?: AbortSignal): Promise<BrowserOperationResult<K>> {
+    const result = await this.#requestBrowserOperation(instanceId, operation, payload, signal);
+    const expectedId = 'id' in payload ? payload.id : 'bookmarkId' in payload ? payload.bookmarkId : undefined;
+    if (expectedId !== undefined && 'status' in result && result.status === 'success'
+      && result.value?.id !== expectedId) throw new BridgeError('INVALID_EXTENSION_RESPONSE');
+    return result;
+  }
 
   public async searchBookmarks(instanceId: string,
     payload: BrowserOperationPayload<typeof SEARCH_BOOKMARKS_OPERATION>, signal?: AbortSignal,
