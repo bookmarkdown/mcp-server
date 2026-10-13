@@ -8,9 +8,15 @@ export type BridgeErrorCode =
   | 'REQUEST_CANCELLED'
   | 'BRIDGE_BUSY'
   | 'INVALID_EXTENSION_RESPONSE'
-  | 'INTERNAL_ERROR';
+  | 'INTERNAL_ERROR' | 'CURSOR_EXPIRED' | 'INVALID_CURSOR' | 'TAB_NOT_READABLE' | 'PAGE_CHANGED' | 'SNAPSHOT_TOO_LARGE';
 
 const safeMessages: Record<BridgeErrorCode, string> = {
+  CURSOR_EXPIRED: 'Snapshot expired or evicted. Start a new read without cursor.',
+  INVALID_CURSOR: 'Cursor does not match this operation, tab or mode.',
+  TAB_NOT_READABLE: 'Tab is unavailable, protected or has no active content script. Reload an eligible HTTP(S) tab and retry.',
+  PAGE_CHANGED: 'Tab closed or navigated. Start a new read without cursor.',
+  SNAPSHOT_TOO_LARGE: 'Too many matching tabs. Narrow the window, domain or search filter.',
+
   BRIDGE_UNAVAILABLE: 'The local WebSocket bridge is unavailable.',
   EXTENSION_NOT_CONNECTED: 'No matching authenticated extension is available. Start the server, open BMD Settings > MCP, test with the Browser extension pairing token, save and enable the bridge, then wait for Connected and call devices.list again. The Agent Bearer token is separate.',
   UNSUPPORTED_OPERATION: 'The extension does not support the requested browser operation.',

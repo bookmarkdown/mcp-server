@@ -130,8 +130,11 @@ export class RequestRouter {
       return;
     }
 
+    const code = response.error.code;
+    const safeReadingCode = (pending.operation === 'browser.searchTabs' || pending.operation === 'browser.readTabContent')
+      && (code === 'CURSOR_EXPIRED' || code === 'INVALID_CURSOR' || code === 'TAB_NOT_READABLE' || code === 'PAGE_CHANGED' || code === 'SNAPSHOT_TOO_LARGE') ? code : 'EXTENSION_OPERATION_FAILED';
     this.#settle(response.requestId, {
-      error: new BridgeError('EXTENSION_OPERATION_FAILED'),
+      error: new BridgeError(safeReadingCode),
     });
   }
 

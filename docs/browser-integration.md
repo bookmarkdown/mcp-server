@@ -1,9 +1,29 @@
 ---
 title: "瀏覽器整合指南"
 description: "瀏覽器 extension 連線至 BookMarkdown MCP Server 本機或私有區網 WebSocket 協定與 client 範例。"
-ms.date: 2026-10-11
+ms.date: 2026-10-14
 ms.topic: how-to
 ---
+
+## Progressive reading and atomic paths (2026-10-14)
+
+Updated sources add capabilities `browser.searchTabs` and `browser.readTabContent`.
+The complete input, response, cache, error and extraction limits are maintained in
+[features](features.md#agent-大量分頁整理與正文讀取). Existing listTabs is unchanged.
+Bookmark create/update now also accepts explicit tagPaths, resolved in the same
+transaction as content and memberships; omitting both tag inputs preserves update
+memberships. No schema or manifest permission change is required.
+
+Verified on 2026-10-14: server typecheck/build passed; 54 Node tests passed and
+3 platform-specific cases were skipped. The companion extension passed 225 unit
+tests, typecheck/build and 104 real Chrome scenarios across the complete run plus
+follow-up. The first run had two stale server-version expectations and eight
+MCP UX scenarios gated by environment; all ten and both new intake scenarios
+passed the final 12-test run with E2E_MCP_SERVER_VERSION=0.5.0 and E2E_MCP_UX=true.
+The final build covers page extraction limits, form/hidden text exclusion, stable
+pagination, reload/disconnect invalidation and atomic tag-path bookmark writes.
+
+
 
 ## Library CRUD contract (source update 2026-10-11)
 

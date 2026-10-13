@@ -181,6 +181,23 @@ export function createMcpServer(
     },
   );
 
+  server.registerTool(toolCatalog.searchTabs.name, {
+    description: toolCatalog.searchTabs.description, inputSchema: toolCatalog.searchTabs.inputSchema,
+    outputSchema: toolCatalog.searchTabs.outputSchema,
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false},
+  }, async (args, context) => {
+    try { return toolSuccess(await executor[toolCatalog.searchTabs.name](args, {signal: context.mcpReq.signal})); }
+    catch (error) { return toolError(error); }
+  });
+  server.registerTool(toolCatalog.readTabContent.name, {
+    description: toolCatalog.readTabContent.description, inputSchema: toolCatalog.readTabContent.inputSchema,
+    outputSchema: toolCatalog.readTabContent.outputSchema,
+    annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false},
+  }, async (args, context) => {
+    try { return toolSuccess(await executor[toolCatalog.readTabContent.name](args, {signal: context.mcpReq.signal})); }
+    catch (error) { return toolError(error); }
+  });
+
   server.registerTool(toolCatalog.searchBookmarks.name, {
     description: toolCatalog.searchBookmarks.description,
     inputSchema: toolCatalog.searchBookmarks.inputSchema,
@@ -324,6 +341,8 @@ function isToolExecutor(
 
 export function createBridgeExecutor(bridge: BridgeService): ToolExecutor {
   return {
+    [toolCatalog.searchTabs.name]: ({instanceId, ...payload}, {signal}) => bridge.readingOperation(instanceId, 'browser.searchTabs', payload, signal),
+    [toolCatalog.readTabContent.name]: ({instanceId, ...payload}, {signal}) => bridge.readingOperation(instanceId, 'browser.readTabContent', payload, signal),
     [toolCatalog.createBookmark.name]: ({instanceId, ...payload}, {signal}) => bridge.libraryOperation(instanceId, 'bookmarks.create', payload, signal),
     [toolCatalog.updateBookmark.name]: ({instanceId, ...payload}, {signal}) => bridge.libraryOperation(instanceId, 'bookmarks.update', payload, signal),
     [toolCatalog.deleteBookmark.name]: ({instanceId, ...payload}, {signal}) => bridge.libraryOperation(instanceId, 'bookmarks.delete', payload, signal),
