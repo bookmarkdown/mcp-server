@@ -28,14 +28,18 @@
 
 ## MCP 功能邊界
 
-目前 MCP tools 僅允許以下明確功能：
+目前 MCP tools 僅允許以下明確功能（以 `src/tools/catalog.ts` 為準，共 21 個）：
 
 * `devices.list` 列出此 server process 已知的 instances，並可選擇查詢分頁數。
 * `browser.countOpenTabs` 與 `browser.countOpenWindows` 計算指定 instance 一般視窗中的分頁數或視窗數。
 * `browser.listTabs` 分頁列出一般視窗的 bounded `tabId`、`windowId`、`active`、`title` 與 `url` metadata。
+* `browser.searchTabs` 以快照游標篩選並分頁列出一般、非無痕 HTTP(S) 分頁 metadata。
+* `browser.readTabContent` 以游標分段讀取指定分頁的有界 DOM 文字擷取（extension ADR 0032）；這是唯一回傳頁面內容的工具（ADR 0002）。
 * `browser.openTab`、`browser.closeTab` 與 `browser.moveTab` 執行明確核准的分頁操作；移動只支援不同的一般視窗。
+* `tags.search` 與 `bookmarks.search` 為書籤／標籤唯讀查詢。
+* `bookmarks.create`、`bookmarks.update`、`bookmarks.delete`、`bookmarks.replaceTags`、`bookmarks.setTagMembership`、`tags.create`、`tags.createPath`、`tags.update`、`tags.delete` 為 library 寫入；`tags.previewDelete` 為唯讀刪除預覽。
 
-Extension 必須在計數與清單中排除 incognito 視窗和分頁；server 無法自行驗證 extension 回傳的瀏覽器資料。分頁標題與 URL 可能包含敏感資訊，絕不可記錄 payload 或回傳頁面內容。不要自行新增書籤、SQL、任意 browser operation、其他寫入行為或跨裝置 tab transfer。新增能力需要明確產品需求、資料與授權邊界，以及相應的協定和測試。
+Extension 必須在計數、清單與讀取中排除 incognito 視窗和分頁；server 無法自行驗證 extension 回傳的瀏覽器資料。分頁標題、URL 與頁面文字可能包含敏感資訊，絕不可記錄 payload；除 `browser.readTabContent` 外不得回傳頁面內容。不要自行新增 SQL、任意 browser operation、上列以外的寫入行為或跨裝置 tab transfer。新增能力需要明確產品需求、資料與授權邊界，以及相應的協定和測試。
 
 ## 實作與驗證
 

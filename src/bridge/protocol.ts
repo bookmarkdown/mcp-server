@@ -1,3 +1,4 @@
+import {readingContracts, readingRequestSchemas} from './reading-contracts.js';
 import {libraryOperationContracts, libraryRequestSchemas} from './library-contracts.js';
 import { Buffer } from 'node:buffer';
 import * as z from 'zod/v4';
@@ -158,6 +159,7 @@ export const searchTagsResultSchema = z.object({
 
 export const browserOperationContracts = {
   ...libraryOperationContracts,
+  ...readingContracts,
   [SEARCH_BOOKMARKS_OPERATION]: {payload: searchBookmarksPayloadSchema, result: searchBookmarksResultSchema},
   [SEARCH_TAGS_OPERATION]: {payload: searchTagsPayloadSchema, result: searchTagsResultSchema},
   [COUNT_OPEN_TABS_OPERATION]: {
@@ -215,6 +217,7 @@ export type ExtensionHello = z.infer<typeof extensionHelloSchema>;
 
 export const browserRequestSchema = z.discriminatedUnion('operation', [
   ...libraryRequestSchemas,
+  ...readingRequestSchemas,
   z.object({type: z.literal('browser/request'), requestId: z.string().uuid(),
     operation: z.literal(SEARCH_BOOKMARKS_OPERATION), payload: searchBookmarksPayloadSchema}).strict(),
   z.object({type: z.literal('browser/request'), requestId: z.string().uuid(),

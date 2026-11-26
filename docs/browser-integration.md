@@ -1,9 +1,29 @@
 ---
 title: "瀏覽器整合指南"
 description: "瀏覽器 extension 連線至 BookMarkdown MCP Server 本機或私有區網 WebSocket 協定與 client 範例。"
-ms.date: 2026-10-11
+ms.date: 2026-11-26
 ms.topic: how-to
 ---
+
+## Progressive reading and atomic paths (2026-10-14)
+
+Updated sources add capabilities `browser.searchTabs` and `browser.readTabContent`.
+The complete input, response, cache, error and extraction limits are maintained in
+[features](features.md#agent-大量分頁整理與正文讀取). Existing listTabs is unchanged.
+Bookmark create/update now also accepts explicit tagPaths, resolved in the same
+transaction as content and memberships; omitting both tag inputs preserves update
+memberships. No schema or manifest permission change is required.
+
+Verified on 2026-10-14: server typecheck/build passed; 54 Node tests passed and
+3 platform-specific cases were skipped. The companion extension passed 225 unit
+tests, typecheck/build and 104 real Chrome scenarios across the complete run plus
+follow-up. The first run had two stale server-version expectations and eight
+MCP UX scenarios gated by environment; all ten and both new intake scenarios
+passed the final 12-test run with E2E_MCP_SERVER_VERSION=0.5.0 and E2E_MCP_UX=true.
+The final build covers page extraction limits, form/hidden text exclusion, stable
+pagination, reload/disconnect invalidation and atomic tag-path bookmark writes.
+
+
 
 ## Library CRUD contract (source update 2026-10-11)
 
@@ -31,7 +51,12 @@ Mutations return {status: 'success', value: {id}} or a duplicate, invalid
 (field/message), or conflict (message) result. Domain failures use a successful
 browser RPC envelope but MCP isError: true with structuredContent. Unexpected
 database failures use the existing sanitized operation error. previewDelete is
-read-only and returns four nonnegative counts. Input IDs are positive safe
+read-only and returns four nonnegative counts plus `directChildNames` (at most
+20 direct child tag names in tree order; `directChildCount` remains the total)
+and `uncategorizedCount: {promote, subtree}` (affected bookmarks that would fall
+back to Uncategorized under each strategy), matching companion extension ADR 0038.
+All six fields are required and the object is strict, so an extension that still
+returns only the four counts fails with INVALID_EXTENSION_RESPONSE. Input IDs are positive safe
 integers; tag arrays contain at most 500 entries. Encoded tool arguments/payloads
 are limited to 12000 UTF-8 bytes, leaving room in the extension request envelope.
 The connection manager still validates responses against the originating request.
@@ -200,7 +225,7 @@ server 目前使用的拒絕原因如下：
 計數與清單只涵蓋一般視窗和分頁。Extension 必須排除 incognito 視窗與分頁，因為 server 無法檢查 extension 回傳的瀏覽器資料。`browser.openTab` 的目標、`browser.closeTab` 的分頁，以及 `browser.moveTab` 的來源和目的地也必須依一般視窗政策處理；`moveTab` 只支援跨視窗移動，不提供同視窗排序或 index。
 
 > [!WARNING]
-> 分頁標題與 URL 可能包含敏感資訊，會由 MCP tool 回傳給呼叫端。只回傳下列有界 metadata，不讀取頁面內容，也不要記錄標題、URL 或 operation payload。
+> 分頁標題與 URL 可能包含敏感資訊，會由 MCP tool 回傳給呼叫端。下列分頁工具只回傳有界 metadata；唯一回傳頁面文字的是 `browser.readTabContent`（見[漸進式讀取](#progressive-reading-and-atomic-paths-2026-10-14)）。不要記錄標題、URL、頁面文字或 operation payload。
 
 `tabId`、`windowId` 與 `targetWindowId` 都是非負安全整數。所有 success `data` 都使用 strict schema；多餘欄位或無效結果會被拒絕。
 

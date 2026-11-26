@@ -63,7 +63,7 @@ Bridge 另行以相同設定限制 pending browser RPC；這是另一個計數�
 
 MCP HTTP 使用 constant-time Bearer token 比較。Host 必須是實際 port 的 loopback 或已綁定私有介面 IP；Origin 若存在須與 Host 同源。只接受 loopback／RFC1918 peers，不提供 CORS。缺少或錯誤的 Authorization 回 `401`。管理頁以 loopback peer、loopback Host、Origin 與 CSRF 隔離，token 僅在本機專用 POST 端點提供；不出現在一般狀態或 log。
 
-Extension WebSocket 保留 pairing token、選填 production extension ID allowlist、Origin 與 hello ID 一致性驗證，以及私有區網 WS／選配 WSS。更新後的 BMD source build 與 server 對齊：本機 `127.0.0.1` 與 RFC1918 私有 IPv4 可使用根路徑明文 WS，不強制 TLS。Browser RPC 保留 operation allowlist、strict schemas 與 instance capability 檢查。分頁 metadata 可能敏感，不記錄操作 payload，不讀取頁面內容；排除 incognito 屬 extension 責任。
+Extension WebSocket 保留 pairing token、選填 production extension ID allowlist、Origin 與 hello ID 一致性驗證，以及私有區網 WS／選配 WSS。更新後的 BMD source build 與 server 對齊：本機 `127.0.0.1` 與 RFC1918 私有 IPv4 可使用根路徑明文 WS，不強制 TLS。Browser RPC 保留 operation allowlist、strict schemas 與 instance capability 檢查。分頁 metadata 可能敏感，不記錄操作 payload；頁面文字只由 `browser.readTabContent` 有界回傳且不記錄（[ADR 0002](adr/0002-bounded-tab-content-reading.md)）；排除 incognito 屬 extension 責任。
 
 ## 驗證範圍
 

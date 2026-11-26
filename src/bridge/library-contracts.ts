@@ -5,6 +5,7 @@ const tagIds = z.array(id).max(500);
 const bookmarkInput = z.object({
   contentUrl: z.string().min(1).max(8192), title: z.string().max(4096),
   description: z.string().max(8192), tagIds: tagIds.optional(),
+  tagPaths: z.array(z.string().min(1).max(8192)).max(50).optional(),
 }).strict();
 const tagInput = z.object({name: z.string().min(1).max(2048), color: z.string().max(64), parentId: id.nullable()}).strict();
 // Keep the whole encoded payload inside the extension's request limit, including escapes.
@@ -22,8 +23,12 @@ export const libraryMutationResultSchema = z.object({
   return result.value === undefined && result.field === undefined && result.message !== undefined;
 }, 'Invalid mutation result');
 const count = z.number().int().nonnegative().safe();
+// Mirrors the extension's TagDeletePreview (ADR 0038): at most 20 direct child names in tree order.
+export const MAX_PREVIEW_CHILD_NAMES = 20;
 const previewResult = z.object({directChildCount: count, descendantTagCount: count,
-  directBookmarkCount: count, subtreeBookmarkCount: count}).strict();
+  directBookmarkCount: count, subtreeBookmarkCount: count,
+  directChildNames: z.array(z.string().max(2048)).max(MAX_PREVIEW_CHILD_NAMES),
+  uncategorizedCount: z.object({promote: count, subtree: count}).strict()}).strict();
 
 export const libraryOperationContracts = {
   'bookmarks.create': {payload: bounded(z.object({input: bookmarkInput}).strict()), result: libraryMutationResultSchema},

@@ -1,3 +1,4 @@
+import type {ReadingOperation} from './reading-contracts.js';
 import type {LibraryOperation} from './library-contracts.js';
 import type { BridgeConfig, BridgeConfigResult } from '../config.js';
 import { defaultBridgeLimits } from '../config.js';
@@ -144,6 +145,31 @@ export class BridgeService {
   }
 
   public get instances(): InstanceSnapshot[] { return this.#connections.listInstances(); }
+
+  public async readingOperation<K extends ReadingOperation>(instanceId: string, operation: K,
+    payload: BrowserOperationPayload<K>, signal?: AbortSignal): Promise<BrowserOperationResult<K>> {
+    const result = await this.#requestBrowserOperation(instanceId, operation, payload, signal);
+    const invalid = () => { throw new BridgeError('INVALID_EXTENSION_RESPONSE'); };
+    const offset = payload.cursor ? Number(payload.cursor.split(':')[1]) : 0;
+    if (Date.parse(result.expiresAt) - Date.parse(result.capturedAt) !== 120000) invalid();
+    let end: number;
+    if ('tabs' in result && 'limit' in payload) {
+      end = offset + result.tabs.length;
+      if (result.tabs.length > payload.limit || end > result.totalCount || (end < result.totalCount && !result.tabs.length)
+        || (result.nextCursor !== null) !== (end < result.totalCount)) invalid();
+    } else if ('text' in result && 'tabId' in payload) {
+      end = offset + result.text.length;
+      if (result.tabId !== payload.tabId || result.mode !== payload.mode
+        || result.text.length > (payload.maxChars ?? (payload.mode === 'excerpt' ? 2000 : 8000))
+        || (result.nextCursor !== null && (!result.truncated || !result.text.length))
+        || (result.sourceTruncated && !result.truncated)) invalid();
+      const url = new URL(result.url);
+      if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) invalid();
+    } else return invalid();
+    if (result.nextCursor && (Number(result.nextCursor.split(':')[1]) !== end
+      || (payload.cursor && result.nextCursor.split(':')[0] !== payload.cursor.split(':')[0]))) invalid();
+    return result;
+  }
 
   public async libraryOperation<K extends LibraryOperation>(instanceId: string, operation: K,
     payload: BrowserOperationPayload<K>, signal?: AbortSignal): Promise<BrowserOperationResult<K>> {
