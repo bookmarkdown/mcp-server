@@ -1,7 +1,7 @@
 ---
 title: "Available Features"
 description: "BookMarkdown MCP daemon、Streamable HTTP、browser window/tab、書籤／標籤查詢與 CRUD 工具及整合狀態。"
-ms.date: 2026-10-14
+ms.date: 2026-11-26
 ms.topic: reference
 ---
 
@@ -92,8 +92,10 @@ Extension 決策記錄為 ADR 0032、0033；兩端皆必須宣告並驗證對應
 | `browser.openTab` | UUID `instanceId`、選用的 `url` 與 `windowId` | 在一般視窗開啟分頁；省略 URL 時使用 `about:blank`，提供的 URL 限制為無憑證 HTTP(S)。 |
 | `browser.closeTab` | UUID `instanceId`、非負整數 `tabId` | 關閉指定分頁。 |
 | `browser.moveTab` | UUID `instanceId`、非負整數 `tabId` 與 `targetWindowId` | 將分頁移至另一個一般視窗，不提供同視窗排序或 index。 |
+| `browser.searchTabs` | UUID `instanceId`、`limit`、`windowId?`、`domain?`、`search?`；續頁傳 `cursor` | 以快照游標分頁篩選一般、非無痕 HTTP(S) 分頁 metadata，詳見上方「Agent 大量分頁整理與正文讀取」。 |
+| `browser.readTabContent` | UUID `instanceId`、`tabId`、`mode`、`maxChars?`、`cursor?` | 分段讀取指定分頁的 DOM 文字擷取（非 AI 摘要），詳見上方章節。 |
 
-計數工具回傳 `count` 與 `countedAt`。分頁標題和 URL 可能含有敏感資訊；`browser.listTabs` 只回傳有界 metadata，不讀取頁面內容。Extension 必須確保 `browser.countOpenTabs`、`browser.countOpenWindows` 與 `browser.listTabs` 排除 incognito 視窗和分頁。Server 無法從 extension 回覆判斷其是否遵守此規則。
+計數工具回傳 `count` 與 `countedAt`。分頁標題和 URL 可能含有敏感資訊；`browser.listTabs` 與 `browser.searchTabs` 只回傳有界 metadata；只有 `browser.readTabContent` 會回傳頁面文字，且 server 不記錄其內容。Extension 必須確保 `browser.countOpenTabs`、`browser.countOpenWindows` 與 `browser.listTabs` 排除 incognito 視窗和分頁。Server 無法從 extension 回覆判斷其是否遵守此規則。
 
 `browser.openTab`、`browser.closeTab` 與 `browser.moveTab` 會改變瀏覽器狀態。逾時或連線中斷時，結果可能不明，server 不會自動重送。所有 browser tools 都要求目標 instance 在 hello capabilities 中宣告相應 operation。
 
@@ -134,7 +136,7 @@ instance registry 只存在 daemon 記憶體中，daemon 重啟後會清空。`i
 | `tags.create` | `input: {name, color, parentId}` | parentId 為 null 建立根節點 |
 | `tags.createPath` | `input: {path, color}` | 以 `::` 分段建立完整路徑，回傳葉節點 ID |
 | `tags.update` | `id`, `input: {name, color, parentId}` | 改名、改色、移動；保留節點 ID 與書籤關聯 |
-| `tags.previewDelete` | `id` | 唯讀計算子標籤、後代及書籤影響範圍 |
+| `tags.previewDelete` | `id` | 唯讀計算子標籤、後代、書籤影響範圍、直接子標籤名稱與兩種策略的未分類書籤數 |
 | `tags.delete` | `id`, `strategy: "subtree" 或 "promote"` | 兩種策略均保留書籤本體 |
 
 先用 `tags.search` 找到 ID，再新增同時具有兩個標籤的書籤：
@@ -162,7 +164,11 @@ URL／description 最多 8,192 字元、title 最多 4,096 字元；過大輸入
 
 9 個寫入工具成功時回傳 `{status: "success", value: {id}}`；duplicate／invalid／conflict 以
 MCP `isError: true` 回傳結構化結果。`tags.previewDelete` 為唯讀工具，回傳
-`directChildCount`、`descendantTagCount`、`directBookmarkCount` 與 `subtreeBookmarkCount`，
+`directChildCount`、`descendantTagCount`、`directBookmarkCount`、`subtreeBookmarkCount`，
+以及 extension ADR 0038 新增的 `directChildNames`（依樹狀順序最多 20 個直接子標籤名稱，
+總數仍以 `directChildCount` 為準）與 `uncategorizedCount: {promote, subtree}`
+（各刪除策略下會失去所有一般標籤、改歸未分類的受影響書籤數）。六個欄位皆為必要且
+strict 驗證；缺少新欄位的舊版 extension 回覆會得到 `INVALID_EXTENSION_RESPONSE`。
 不使用寫入結果格式。逾時、取消或斷線不代表交易一定未提交，
 寫入不自動重送，應先查詢目前資料再決定是否重試。Server 契約來源為
 [library-contracts.ts](../src/bridge/library-contracts.ts)；companion extension 實作另行維護。
@@ -180,7 +186,7 @@ daemon 預設在 `127.0.0.1:38471` 接受 WebSocket，MCP 在 `127.0.0.1:38472/m
 
 HTTP 缺少或不正確的 Bearer token 回 `401`，非法 Host/Origin 回 `403`，body 超限回 `413`，同時處理中的 HTTP 請求超限回 `503`。工具錯誤包含 `EXTENSION_NOT_CONNECTED`、`UNSUPPORTED_OPERATION`、`REQUEST_TIMEOUT`、`REQUEST_CANCELLED`、`EXTENSION_DISCONNECTED`、`EXTENSION_OPERATION_FAILED`、`BRIDGE_BUSY` 與 `INVALID_EXTENSION_RESPONSE`。取消或斷線不會自動重送瀏覽器操作。
 
-WebSocket hello 使用 protocol version `2`。一般註冊要求 app ID `bmd-extension`、browser `chrome`、UUID instance ID、合法裝置別名及與 Origin 相符的 extension ID；正式模式若設定非空 allowlist，ID 必須符合清單。Probe 可省略別名且不會註冊 instance。Browser RPC 接受上述兩個唯讀查詢、10 個 library 操作，以及 `browser.countOpenTabs`、`browser.countOpenWindows`、`browser.listTabs`、`browser.openTab`、`browser.closeTab` 與 `browser.moveTab`，並在呼叫前檢查 instance capabilities。request ID 用於將回覆配對到原始連線及呼叫。
+WebSocket hello 使用 protocol version `2`。一般註冊要求 app ID `bmd-extension`、browser `chrome`、UUID instance ID、合法裝置別名及與 Origin 相符的 extension ID；正式模式若設定非空 allowlist，ID 必須符合清單。Probe 可省略別名且不會註冊 instance。Browser RPC 接受上述兩個唯讀查詢、10 個 library 操作，以及 `browser.countOpenTabs`、`browser.countOpenWindows`、`browser.listTabs`、`browser.openTab`、`browser.closeTab`、`browser.moveTab`、`browser.searchTabs` 與 `browser.readTabContent`，並在呼叫前檢查 instance capabilities。request ID 用於將回覆配對到原始連線及呼叫。
 
 ## 驗證狀態與後續工作
 
