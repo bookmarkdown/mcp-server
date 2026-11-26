@@ -70,9 +70,9 @@ Extension 必須在計數與清單中排除 incognito 視窗和分頁；server �
 
 ## Skills
 
-`.agents/skills/` 為唯一位置（`.claude/skills`、`.github/skills` 為指向此處的 symlink）：`mcp-live-testing`、`security-audit`、`frontend-design`、`grilling`、`grill-with-docs`。只在任務明確符合或使用者要求時使用。
+`.agents/skills/` 為唯一位置（VS Code／Copilot／Codex 直接讀取；`.claude/skills` 為給 Claude Code 的 symlink）：`mcp-live-testing`、`security-audit`、`frontend-design`、`grilling`、`grill-with-docs`。只在任務明確符合或使用者要求時使用。
 
-> **Windows**：`.claude/skills`、`.github/skills` 是 Git symlink。clone 前需啟用「開發人員模式」（或以系統管理員身分執行 Git）並設定 `git config --global core.symlinks true`；否則 checkout 後會變成內容只有路徑的純文字檔，Claude Code／Copilot 讀不到 skills。若已 clone，設定後執行 `git checkout -- .claude/skills .github/skills` 重建。任何工具都可直接讀 `.agents/skills/`。
+> **Windows**：VS Code、Copilot CLI／雲端 agent 與 Codex 直接讀 `.agents/skills/`，不受影響。只有 Claude Code 需要 `.claude/skills` 這個 Git symlink：在 Windows 上要啟用「開發人員模式」（或以系統管理員身分執行 Git）並設定 `git config --global core.symlinks true`，否則 checkout 後會變成內容只有路徑的純文字檔。若已 clone，設定後執行 `git checkout -- .claude/skills` 重建。
 
 ## 工作流程
 
