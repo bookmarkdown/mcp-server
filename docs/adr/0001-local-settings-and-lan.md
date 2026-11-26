@@ -1,11 +1,16 @@
 ---
-title: Local settings and LAN implementation plan
-description: Accepted scope for persistent configuration, local management, and multi-device access.
+title: Local settings and LAN access
+description: Persistent per-user configuration, local management page, and optional private-network access
+status: accepted
 ms.date: 2026-10-03
-ms.topic: reference
+ms.topic: architecture
 ---
 
-## Accepted behavior
+## Context
+
+The daemon needed persistent configuration, a local management page, and optional multi-device (LAN) access without preconfigured environment variables or extension IDs. This ADR replaces the former `docs/local-settings-plan.md`.
+
+## Decision
 
 The CLI reads a per-user configuration file before listening. First launch creates it with independent random MCP and extension tokens. Environment variables override saved values. Invalid configuration fails startup without replacing the file.
 
@@ -19,6 +24,6 @@ Compatible Chrome extensions can pair without preconfigured IDs. An explicit pro
 
 Check configuration creation/reuse, permissions, malformed files, environment overrides, local page access, masked status, CSRF, saving/restart, token rotation, LAN routing, unrestricted pairing, and existing MCP/bridge tests. Verify the compiled CLI and management UI. Real Chrome/extension integration remains a separate integration check.
 
-## Implementation result
+## Consequences and implementation result
 
 Implemented the accepted scope. Windows checks pass: 44 tests, typecheck, build, and packed-artifact configuration/assets/status/MCP smoke. Three platform-specific tests are skipped. Clean npm installation is blocked by registry access restrictions. Browser security policy denied local UI navigation, so visual layout and actual browser interactions remain unverified; no alternate browser route was attempted.

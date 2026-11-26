@@ -1,7 +1,7 @@
 ---
 title: "文件規約"
 description: "BookMarkdown MCP Server 公開文件的語言、格式、內容責任與維護要求。"
-ms.date: 2026-10-09
+ms.date: 2026-11-26
 ms.topic: reference
 ---
 
@@ -33,8 +33,19 @@ ms.topic: reference
 | `docs/architecture.md` | 程序責任、資料流、HTTP/WebSocket 邊界、生命週期與安全假設。 |
 | `docs/browser-integration.md` | Browser extension WebSocket contract、驗證、hello/ack、RPC schemas、限制、錯誤處理及串接驗收狀態。 |
 | `docs/documentation-conventions.md` | 文件語言、格式、責任分工與維護規則。 |
+| `docs/adr/NNNN-*.md` | 跨工作階段仍有效的架構決策；一個 ADR 一項決策，`status` 為 `proposed`、`accepted`、`deprecated` 或 `superseded by ADR-NNNN`。 |
+| `docs/proposals/` | 尚未定案的方案，`status: proposed`，不得描述為已實作；需要時才建立。 |
+| `docs/todo.md` | 集中待辦；完成或明確取消後移除項目。 |
 
 設定、安裝或使用流程改變時更新 README。Tool contract 改變時同步更新 features 與 browser integration 文件；程序或資料流改變時同步更新 architecture 文件。不要把同一份完整規格複製到 README。
+
+## 文件分層
+
+與 companion extension repository 採相同分層：決策放 `docs/adr/`，未定案方案放 `docs/proposals/`，待辦集中在 `docs/todo.md`，現行規格放 `docs/` 根目錄。
+
+* 只有正在執行且需要細節的計畫才另建文件；結案後把有效決策寫入 ADR、未完成事項收回 `docs/todo.md`，再刪除計畫。
+* 不保存已完成工作的 changes、review、log 或 archive 副本；修訂歷史由 Git 保存。
+* 新方案取代舊決策時建立新的 ADR，舊 ADR 標記 `superseded`，不刪除。
 
 ## 狀態與證據
 
