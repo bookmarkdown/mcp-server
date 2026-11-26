@@ -107,7 +107,7 @@ Extension 決策記錄為 ADR 0032、0033；兩端皆必須宣告並驗證對應
 * `bookmarks.search` 接受 UUID `instanceId`、`keywords`、`tagIds`、`search`、`limit` 與 `offset`。每個關鍵詞與選定 ID 都必須符合（AND）；關鍵詞比對完整名稱與祖先，ID 包含子樹。不同資料夾的同名標籤以 ID 區分；已刪除 ID 回傳零筆。`search` 額外比對標題／URL，最多 1024 字元。keywords／tagIds 各最多 50 個，關鍵詞每個最多 256 字元。
 * AI host 先從自然語言取得實際標籤關鍵詞，可用 `tags.search` 探索名稱／ID，再呼叫 `bookmarks.search`，例如 `{"instanceId":"<UUID>","keywords":["React","拖曳"]}`。Extension 執行確定的資料庫查詢，沒有內建 AI，也不展開同義詞。
 * 兩個工具每頁最多 10 筆，結果包含 totalCount、nextOffset 與 queriedAt。書籤 metadata 包含 id、title、url、description 與最多 10 個標籤；文字和整頁有大小上限，truncated 表示縮短文字或省略標籤。沿 nextOffset 分頁，不要假設每頁一定滿 10 筆；名稱／路徑截短時使用 ID 查詢。
-* 這兩個查詢工具標示 readOnlyHint；沿用 token、Origin、instance capabilities、request ID、逾時與取消契約。不提供 SQL 或頁面內容工具，也不記錄查詢或書籤 payload。書籤／標籤寫入另見下方 CRUD 章節。
+* 這兩個查詢工具標示 readOnlyHint；沿用 token、Origin、instance capabilities、request ID、逾時與取消契約。這兩個工具不回傳頁面內容（頁面文字只由 `browser.readTabContent` 提供），不提供 SQL，也不記錄查詢或書籤 payload。書籤／標籤寫入另見下方 CRUD 章節。
 
 工具 schema、SDK MCP 呼叫、認證 WebSocket 路由與完整 server 建置／型別／daemon 測試已驗證。Companion extension 的 Chrome 驗收使用正式 daemon 的 HTTP MCP，涵蓋標籤探索、關鍵詞及 ID 交集、標題篩選、分頁、改名同步、非法參數與停用後拒絕查詢。這不是特定產品 host 的相容性認證。
 

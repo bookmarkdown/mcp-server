@@ -10,7 +10,7 @@ The project is in pre-1.0 development; features and interfaces may change.
 
 The daemon connects agents to compatible browser extensions and provides bounded MCP tools. Pairing and server settings are managed through a local page.
 
-Tab titles and URLs may contain sensitive information. The server does not read page contents. The extension is expected to exclude incognito windows and tabs. Tab changes are not automatically retried when the result is unknown.
+Tab titles and URLs may contain sensitive information. Only `browser.readTabContent` returns page text: a bounded extract of a tab the agent explicitly requests, never logged by the server. The extension is expected to exclude incognito windows and tabs. Tab changes are not automatically retried when the result is unknown.
 
 See [Features and limitations (Traditional Chinese)](docs/features.md), [Architecture (Traditional Chinese)](docs/architecture.md), the [browser integration guide (Traditional Chinese)](docs/browser-integration.md), the [push and release workflow (Traditional Chinese)](docs/pushing.md), and [documentation conventions (Traditional Chinese)](docs/documentation-conventions.md).
 

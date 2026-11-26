@@ -34,7 +34,7 @@
 * `browser.countOpenTabs` 與 `browser.countOpenWindows` 計算指定 instance 一般視窗中的分頁數或視窗數。
 * `browser.listTabs` 分頁列出一般視窗的 bounded `tabId`、`windowId`、`active`、`title` 與 `url` metadata。
 * `browser.searchTabs` 以快照游標篩選並分頁列出一般、非無痕 HTTP(S) 分頁 metadata。
-* `browser.readTabContent` 以游標分段讀取指定分頁的有界 DOM 文字擷取（extension ADR 0032）；這是唯一回傳頁面內容的工具。
+* `browser.readTabContent` 以游標分段讀取指定分頁的有界 DOM 文字擷取（extension ADR 0032）；這是唯一回傳頁面內容的工具（ADR 0002）。
 * `browser.openTab`、`browser.closeTab` 與 `browser.moveTab` 執行明確核准的分頁操作；移動只支援不同的一般視窗。
 * `tags.search` 與 `bookmarks.search` 為書籤／標籤唯讀查詢。
 * `bookmarks.create`、`bookmarks.update`、`bookmarks.delete`、`bookmarks.replaceTags`、`bookmarks.setTagMembership`、`tags.create`、`tags.createPath`、`tags.update`、`tags.delete` 為 library 寫入；`tags.previewDelete` 為唯讀刪除預覽。
