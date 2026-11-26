@@ -5,6 +5,7 @@ const tagIds = z.array(id).max(500);
 const bookmarkInput = z.object({
   contentUrl: z.string().min(1).max(8192), title: z.string().max(4096),
   description: z.string().max(8192), tagIds: tagIds.optional(),
+  tagPaths: z.array(z.string().min(1).max(8192)).max(50).optional(),
 }).strict();
 const tagInput = z.object({name: z.string().min(1).max(2048), color: z.string().max(64), parentId: id.nullable()}).strict();
 // Keep the whole encoded payload inside the extension's request limit, including escapes.

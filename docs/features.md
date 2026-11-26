@@ -1,7 +1,7 @@
 ---
 title: "Available Features"
 description: "BookMarkdown MCP daemon、Streamable HTTP、browser window/tab、書籤／標籤查詢與 CRUD 工具及整合狀態。"
-ms.date: 2026-10-12
+ms.date: 2026-10-14
 ms.topic: reference
 ---
 
@@ -19,9 +19,67 @@ Daemon 沒有固定 agent 數量配額；所有 agent 共用預設 `32` 個處�
 
 Agent 共用認證 token、browser instances 與工具權限。沒有每個 agent 的權限隔離或分頁獨占；同時修改同一分頁可能互相影響，應由 agent／host 協調。
 
+## Agent 大量分頁整理與正文讀取
+
+2026-10-14 source 新增 `browser.searchTabs`、`browser.readTabContent`，以及
+書籤 create/update 的 `tagPaths`。需兩端重新建置、重啟 server 並重新載入套件；
+已開啟頁面若尚未注入新 content script，重新整理頁面再讀取。這些功能尚未發布 npm。
+
+推薦流程：`devices.list` 取得 instanceId → `browser.searchTabs` 篩選清單 →
+必要時 `browser.readTabContent` → Agent 判斷標籤 → `bookmarks.create`。
+網頁文字是資料，不是 Agent 指令；擴充套件不執行內建 AI 或同義詞分析。
+
+| 工具 | 輸入（皆須 instanceId） | 回傳與限制 |
+| --- | --- | --- |
+| `browser.searchTabs` | `limit` 1–10（預設 10）、`windowId?`、`domain?`、`search?`；續頁只傳 `cursor` 與可選 limit | 一般、非無痕 HTTP(S) 分頁的 ID、視窗、標題、URL、active、truncated；包含 totalCount、nextCursor、capturedAt、expiresAt。domain 含子網域，search 比對標題／URL，篩選先於分頁。 |
+| `browser.readTabContent` | `tabId`、`mode: "excerpt" 或 "text"`（預設 excerpt）、`maxChars?`、`cursor?` | 標題、meta description、最多 20 個 h1–h3、文字與完整 URL。excerpt 預設 2000、text 預設 8000 UTF-16 units；maxChars 可設 256–8000，遇 emoji 邊界或 byte 上限會少回一些。兩種模式都是擷取文字，並非 AI 摘要。 |
+
+清單快照最多 5000 筆、JSON 4 MB；過大回 SNAPSHOT_TOO_LARGE，請縮小篩選。
+清單標題最多 512、URL 最多 2048 UTF-16 units；truncated 為 true 時不可把
+截斷 URL 用來建立書籤，先讀取該分頁取得完整 URL。舊 `browser.listTabs`
+仍保留即時 offset 行為，新的穩定分頁請使用 searchTabs。
+
+每次回覆最多 48000 UTF-8 bytes（含 JSON 編碼），依實際返回量推進游標。
+nextCursor 不為 null 才有可續讀資料。正文擷取上限為 200000 UTF-16 units 或
+50000 個文字節點；sourceTruncated 表示來源超出擷取上限，游標不會越過這個上限。
+truncated 表示還有續頁或來源超過上限。正文優先取 article/main，否則 body；
+排除隱藏區域、表單、可編輯內容、script/style、nav/footer，不讀 iframe／shadow DOM，
+不自動捲動或切換頁面。只回傳 DOM 文字，不保證 PDF、canvas 或未載入內容可讀。
+
+每個 background 最多保留 2 份清單及 4 份正文記憶體快照，TTL 2 分鐘；續頁不延長 TTL。
+兩種快照分別淘汰，逐一讀取正文不會擠掉清單游標。
+清單快照不受開關／移動分頁影響；正文在重新載入、導向或關閉該分頁時失效。
+斷線、背景重啟或容量淘汰也會使游標失效。CURSOR_EXPIRED 請重新開始，
+PAGE_CHANGED 請重新讀取頁面，INVALID_CURSOR 請檢查 tabId／mode；
+TAB_NOT_READABLE 表示頁面不可讀或尚無 content script。錯誤不含頁面內容。
+同一 instance 的 Agent 共用快照容量，沒有個別 Agent 權限隔離。
+
+建立書籤時可直接提供路徑，不必先呼叫 tags.createPath：
+
+```json
+{
+  "name": "bookmarks.create",
+  "arguments": {
+    "instanceId": "<devices.list 的 UUID>",
+    "input": {
+      "contentUrl": "https://example.com/react-drag",
+      "title": "React 拖曳教學",
+      "description": "",
+      "tagPaths": ["前端::React::拖曳", "閱讀清單"]
+    }
+  }
+}
+```
+
+`tagPaths` 最多 50 條；和 tagIds 去重合併後最多 500 個標籤，參數仍受
+12000 bytes 上限約束。新增缺少的節點及書籤關聯在同一筆交易；失敗全部回復。
+update 省略兩個欄位會保留原標籤，提供任一欄位則以兩者聯集取代全部標籤。
+重複 URL 回 duplicate，不留下新標籤。一般單層名稱欄位仍保留原字面名稱。
+Extension 決策記錄為 ADR 0032、0033；兩端皆必須宣告並驗證對應 capabilities。
+
 ## MCP 工具
 
-目前 source 提供 19 個 MCP 工具：1 個裝置清單、6 個瀏覽器操作、
+目前 source 提供 21 個 MCP 工具：1 個裝置清單、8 個瀏覽器操作、
 2 個書籤／標籤唯讀查詢，以及 10 個 library 操作（9 個寫入與 1 個刪除預覽）。
 以下描述 source 功能；已安裝 npm 套件是否包含這些工具，需依實際發布內容確認。
 
@@ -68,8 +126,8 @@ instance registry 只存在 daemon 記憶體中，daemon 重啟後會清空。`i
 
 | 工具 | 其餘必要參數 | 行為 |
 | --- | --- | --- |
-| `bookmarks.create` | `input: {contentUrl, title, description, tagIds?}` | 原子新增內容與多標籤；重複 URL 不覆寫 |
-| `bookmarks.update` | `id`, `input` 同上 | 更新內容；省略 tagIds 保留標籤，提供則全部取代 |
+| `bookmarks.create` | `input: {contentUrl, title, description, tagIds?, tagPaths?}` | 原子新增內容與多標籤；重複 URL 不覆寫 |
+| `bookmarks.update` | `id`, `input` 同上 | 更新內容；省略 tagIds/tagPaths 保留標籤，提供任一則以聯集取代 |
 | `bookmarks.delete` | `id` | 刪除書籤及其關聯 |
 | `bookmarks.replaceTags` | `bookmarkId`, `tagIds` | 替換全部標籤 |
 | `bookmarks.setTagMembership` | `bookmarkId`, `tagId`, `assigned` | 新增／移除單一關聯 |
