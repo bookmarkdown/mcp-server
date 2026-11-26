@@ -29,6 +29,8 @@ Run the daemon without a global installation:
 npx -y @bookmarkdown/mcp-server@latest
 ```
 
+`@latest` installs the latest npm release, which currently provides only the device and tab tools. Bookmark/tag search, library write tools and tab reading are implemented in source and planned for the next release; until then, use [Install from source](#install-from-source). See [Features and limitations (Traditional Chinese)](docs/features.md#mcp-工具).
+
 The first launch creates settings and two independent tokens; no ENV setup or extension ID is required. Keep the terminal open; press Ctrl+C to stop. For a global installation, run `npm install --global @bookmarkdown/mcp-server`, then `bookmarkdown-mcp-server`.
 
 ## Install from source

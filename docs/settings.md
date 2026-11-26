@@ -1,7 +1,7 @@
 ---
 title: Local settings and multi-device setup
 description: Configure the daemon through its local management page and connect LAN agents and extensions.
-ms.date: 2026-10-09
+ms.date: 2026-11-27
 ms.topic: how-to
 ---
 
@@ -15,14 +15,14 @@ Open the local settings URL printed in the terminal, normally `http://127.0.0.1:
 
 The supported client contract is BookMarkdown/BMD Chrome extension protocol `2`, app ID `bmd-extension`. A client must implement this contract and authenticate; accepting any compatible extension ID does not mean arbitrary browser extensions work. Connected instances are discovered through successful pairing. The list is process-local and includes previously connected instances while this daemon remains running. The page never queries tab contents or performs tab mutations. An explicit read-only connection check can request the selected device's tab count.
 
-For local BMD setup, copy the browser-extension card's WebSocket URL and pairing token into Options → Settings → MCP. Test, then choose Save and enable in the updated extension; separate Save and enable controls remain available. The verify/save/register steps distinguish a successful probe from saved settings and a registered device. Use the agent card's separate MCP token only in the host's Authorization header. Templates use token placeholders and copy actions require an explicit click. Released server `0.4.0` is the historical WS baseline; guided management UX and health checks are included in `0.4.1`. Use a compatible updated extension. See [integration evidence (Traditional Chinese)](browser-integration.md).
+For local BMD setup, copy the browser-extension card's WebSocket URL and pairing token into Options → Settings → MCP. Test, then choose Save and enable in the updated extension; separate Save and enable controls remain available. The verify/save/register steps distinguish a successful probe from saved settings and a registered device. Use the agent card's separate MCP token only in the host's Authorization header. Templates use token placeholders and copy actions require an explicit click. Guided setup and connection checks require a compatible updated extension. See [verification scope (Traditional Chinese)](browser-integration.md#狀態與驗證範圍).
 
 ## One-click extension pairing
 
-The updated source adds **Connect Chrome extension** (`連接 Chrome 套件`) and
-**Copy pairing link** (`複製配對連結`) to the Browser extension card. This
-handoff is included in server `0.4.1`. Update the daemon and use a compatible
-extension build; restart the daemon/reload the extension before using it.
+The Browser extension card provides **Connect Chrome extension**
+(`連接 Chrome 套件`) and **Copy pairing link** (`複製配對連結`). This handoff is
+implemented and requires a compatible extension build; restart the daemon and
+reload the extension after updating either side.
 
 1. Confirm the target Chrome extension ID. The initial value is
    `kdnjdggdbibdliholcdkmdkajacdmnhd`, supplied by the user; it does not establish
@@ -55,6 +55,23 @@ browser does not expose the management page remotely. Clearing the current URL
 does not erase clipboard or other historical copies; provide the link only to
 the browser being paired. Missing/wrong-ID/older extensions require installation,
 an ID correction or manual pairing.
+
+## Capacity limits
+
+The daemon has no fixed per-agent quota. All agents share one budget of in-flight
+HTTP requests (`BOOKMARKDOWN_MAX_PENDING_REQUESTS`, default `32`, range `1–256`),
+counting every accepted POST such as initialize, tools/list and tools/call. Idle
+agents use none of it. Over the limit, or while shutting down, HTTP returns `503`
+with `Retry-After: 1`. The bridge applies the same setting to a separate counter
+of pending browser RPCs and returns the tool error `BRIDGE_BUSY` when it is full;
+one `devices.list` call with tab counts can use several browser RPCs.
+
+`BOOKMARKDOWN_MAX_CONNECTIONS` (default `8`, range `1–64`) limits extension
+WebSocket connections, not agents. `BOOKMARKDOWN_MAX_REGISTERED_INSTANCES`
+(default `64`) limits registered instances, `BOOKMARKDOWN_MAX_PAYLOAD_BYTES`
+(default 64 KiB) limits WebSocket messages and HTTP bodies (`413` over the limit),
+and `BOOKMARKDOWN_REQUEST_TIMEOUT_MS` (default `5000`) bounds each browser RPC.
+All limits take effect after restart; see [Environment overrides](#environment-overrides).
 
 ## Storage location
 

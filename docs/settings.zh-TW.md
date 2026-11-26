@@ -1,7 +1,7 @@
 ---
 title: "本機設定與多裝置連線"
 description: "透過本機管理頁設定 daemon，並連接區網 agent 與瀏覽器套件。"
-ms.date: 2026-10-09
+ms.date: 2026-11-27
 ms.topic: how-to
 ---
 
@@ -26,14 +26,13 @@ Bearer header；套件使用另一組配對 token，不可混用。
 
 手動配對時，從「瀏覽器套件」複製 WS URL 與配對 token 到 BMD「設定 → MCP」，
 先測試，再「儲存並啟用」；也可分開儲存及啟用。Probe 成功不代表已儲存或註冊。
-Agent 樣板只含 token 佔位值，複製需明確點選。歷史 WS 基線為 `0.4.0`；
-配對引導與健康檢查已包含在 server `0.4.1`，需搭配相容的新版套件。
-驗證範圍見[整合指南](browser-integration.md)。
+Agent 樣板只含 token 佔位值，複製需明確點選。配對引導與健康檢查需搭配相容的新版套件，
+驗證範圍見[整合指南](browser-integration.md#狀態與驗證範圍)。
 
 ## 一鍵套件配對
 
-Server `0.4.1` 提供「連接 Chrome 套件」及「複製配對連結」。更新 daemon
-及相容套件後，重啟 daemon 並重新載入套件。
+「瀏覽器套件」卡片提供「連接 Chrome 套件」及「複製配對連結」，需搭配相容套件。
+任一端更新後，重啟 daemon 並重新載入套件。
 
 1. 確認 Chrome extension ID。預填的 `kdnjdggdbibdliholcdkmdkajacdmnhd`
    是使用者指定值，不代表套件已上架或安裝。開發版請從 `chrome://extensions`
@@ -58,6 +57,20 @@ TLS 或一次性代碼服務。管理頁仍只供本機存取。
 複製 LAN 配對連結不會開放遠端管理頁。清除目前 URL 不會清除剪貼簿或其他歷史副本；
 請只交給要配對的瀏覽器。未安裝、ID 錯誤或版本過舊時，請安裝／更新套件、修正 ID
 或改用手動配對。
+
+## 容量上限
+
+Daemon 沒有固定的 agent 數量配額。所有 agent 共用處理中 HTTP 請求額度
+（`BOOKMARKDOWN_MAX_PENDING_REQUESTS`，預設 `32`，範圍 `1–256`），包含 initialize、
+tools/list、tools/call 等所有已接受的 POST；閒置 agent 不占用額度。超限或正在關閉時
+HTTP 回 `503` 與 `Retry-After: 1`。Bridge 以相同設定另行計算 pending browser RPC，
+滿載時回工具錯誤 `BRIDGE_BUSY`；單次 `devices.list` 查詢分頁數可能占用多個 browser RPC。
+
+`BOOKMARKDOWN_MAX_CONNECTIONS`（預設 `8`，範圍 `1–64`）限制 extension WebSocket
+連線數，並非 agent 數量上限。`BOOKMARKDOWN_MAX_REGISTERED_INSTANCES`（預設 `64`）
+限制註冊 instance 數，`BOOKMARKDOWN_MAX_PAYLOAD_BYTES`（預設 64 KiB）限制 WebSocket
+訊息與 HTTP body（超限回 `413`），`BOOKMARKDOWN_REQUEST_TIMEOUT_MS`（預設 `5000`）
+限制每個 browser RPC 的等待時間。所有上限需重啟後生效，見[環境變數覆寫](#環境變數覆寫)。
 
 ## 設定檔位置
 

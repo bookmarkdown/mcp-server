@@ -1,7 +1,7 @@
 ---
 title: "MCP Streamable HTTP Daemon 架構"
 description: "Agent 直接呼叫 HTTP daemon 與 browser WebSocket bridge 的資料流、安全邊界及生命週期。"
-ms.date: 2026-10-09
+ms.date: 2026-11-27
 ms.topic: concept
 ---
 
@@ -25,9 +25,7 @@ HTTP body 上限沿用 `BOOKMARKDOWN_MAX_PAYLOAD_BYTES`，超限回 `413`。同�
 
 ## 多 agent 請求配對與共享狀態
 
-Daemon 未實作 agent 數量配額或持久的 agent session。所有 agent 共用 HTTP 處理額度，`BOOKMARKDOWN_MAX_PENDING_REQUESTS` 預設為 `32`，可設定 `1–256`；修改後需重啟 daemon。額度包含正在處理的 initialize、tools/list、tools/call 與其他已接受的 POST。閒置 agent 不占用此額度，超限回 HTTP `503` 與 `Retry-After: 1`。實際可服務的 agent 數仍取決於系統資源與呼叫頻率。
-
-Bridge 另行以相同設定限制 pending browser RPC；這是另一個計數器，超限回工具錯誤 `BRIDGE_BUSY`。單次 devices.list 在查詢多個 instance 分頁數時，可能產生多個 browser RPC。`BOOKMARKDOWN_MAX_CONNECTIONS` 預設 `8`、範圍 `1–64`，用於 extension WebSocket 連線上限，並非 agent 數量上限。
+Daemon 未實作 agent 數量配額或持久的 agent session；所有 agent 共用 HTTP 處理額度，bridge 另以獨立計數器限制 pending browser RPC，數值與超限回覆見[容量上限](settings.zh-TW.md#容量上限)。實際可服務的 agent 數仍取決於系統資源與呼叫頻率。
 
 兩層 ID 分別由 MCP client 與 daemon 管理：
 
@@ -44,11 +42,11 @@ Bridge 另行以相同設定限制 pending browser RPC；這是另一個計數�
 
 ## 設定與管理頁
 
-管理頁的明確配對操作可呼叫本機 CSRF 保護的 `POST /api/pairing-link`，驗證目標 ID 與當前列出的 WS 端點後，將執行中 bridge token 放入套件設定頁的 URL fragment。套件清除目前網址參數、帶入草稿並提示測試，仍需使用者儲存並啟用；不改 MCP 或 WS wire contract。這是使用者授權的特定 credential handoff，完整範圍見[設定指南](settings.md#one-click-extension-pairing)。
+管理頁的一鍵配對以本機 CSRF 保護的 `POST /api/pairing-link`，將執行中 bridge token 放入套件設定頁的 URL fragment；這是使用者授權的特定 credential handoff，不改 MCP 或 WS wire contract，見[一鍵配對](settings.zh-TW.md#一鍵套件配對)。
 
-設定檔跨重啟保存；instance registry 只在記憶體。網頁保存設定或重建 token 後，服務繼續使用原設定直到重啟；連線卡片與複製按鈕只提供執行中憑證，並標示待生效角色。管理頁瀏覽器保留不含 token 的更新客戶端提醒，重啟後由使用者確認；不是持久的 server 客戶端確認 registry。
+設定檔跨重啟保存；instance registry 只在記憶體。保存設定或重建 token 後，服務繼續使用原設定直到重啟，見[儲存與重啟](settings.zh-TW.md#儲存與重啟)。
 
-管理頁通常只讀取已知裝置狀態；使用者明確觸發三段健康檢查時，daemon 以執行中 HTTP endpoint／token 執行 initialize、tools/list 與選定線上裝置的 `browser.countOpenTabs`。六秒總逾時，沿用本機 Host／Origin／CSRF 保護；不讀頁面內容、不異動分頁、不新增 MCP 工具。完整邊界見[設定指南](settings.md)。
+管理頁通常只讀取已知裝置狀態；使用者明確觸發的唯讀健康檢查沿用本機 Host／Origin／CSRF 保護，不異動分頁、不新增 MCP 工具，見[唯讀連線檢查](settings.zh-TW.md#唯讀連線檢查)。
 
 ## 生命週期
 
@@ -67,4 +65,4 @@ Extension WebSocket 保留 pairing token、選填 production extension ID allowl
 
 ## 驗證範圍
 
-Node.js 測試涵蓋 HTTP initialize、工具目錄、認證、Host/Origin、body 限制、取消、併發隔離、啟動 rollback、關閉與 WebSocket browser RPC。Linux WSS 與 Unix symlink CLI 測試在 Windows 略過。Server `0.4.0` 與 BMD `0.0.1` 已在 Windows、Chrome 153 以自訂 HTTP JSON-RPC test host 驗證 loopback 與同機私有網卡 WS 配對、七個工具、實際分頁異動與重啟重連；遠端 WSS、其他 Chrome/LNA 組合與指定產品 MCP host 尚未驗證。環境與測試範圍見[瀏覽器整合指南](browser-integration.md)，設定見 [README](../README.zh-TW.md)。
+Node.js 測試涵蓋 HTTP initialize、工具目錄、認證、Host/Origin、body 限制、取消、併發隔離、啟動 rollback、關閉與 WebSocket browser RPC；Linux WSS 與 Unix symlink CLI 測試在 Windows 略過。真實 Chrome／extension 串接的已驗證與 not verified 範圍見[瀏覽器整合指南](browser-integration.md#狀態與驗證範圍)，設定見 [README](../README.zh-TW.md)。

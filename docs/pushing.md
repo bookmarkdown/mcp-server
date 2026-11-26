@@ -1,7 +1,7 @@
 ---
 title: "推送與發布流程"
 description: "BookMarkdown MCP Server 日常 branch、pull request、Changesets、tag 與 npm 發布操作清單。"
-ms.date: 2026-10-09
+ms.date: 2026-11-27
 ms.topic: how-to
 ---
 
@@ -170,8 +170,7 @@ tag 版本與最新 `main` commit 相符，並檢查 npm registry 是否已有�
 * Environment：`npm`
 
 Publish workflow 使用 GitHub-hosted runner 與 `id-token: write`，不使用
-長期 npm token。過去 `0.2.0` 發布曾遇到 OIDC `E404`；每次發布前仍需確認
-Trusted Publisher mapping，不把歷史失敗當成目前設定狀態。
+長期 npm token。每次發布前確認 Trusted Publisher mapping。
 
 ## 失敗時怎麼做
 
@@ -199,10 +198,7 @@ Publisher 設定，逐項核對上方四個值；這通常代表 publisher mappi
 npm 版本不可覆寫。建立一般 fix branch、加入 patch Changeset，經 Version
 Packages pull request 產生更高版本。不要移動或重用已發布的 tag。
 
-## 歷史發布紀錄
+## 版本紀錄
 
-`0.2.0` 的 release PR #5 與 annotated tag `v0.2.0` 對應 commit
-`fc199e3`。當時 Ubuntu、Windows CI 與 npm registry 安裝後的 Ubuntu MCP
-initialize smoke 通過；OIDC 發布遭拒後，才以認證的手動發布完成。
-這是歷史紀錄，不代表目前的 npm `latest` 或當前版本已通過相同驗證。
-各版本變更見 [CHANGELOG](../CHANGELOG.md)。
+各版本變更見 [CHANGELOG](../CHANGELOG.md)。`CHANGELOG.md` 由 Changesets 產生，
+其中的版本號不一定都已發布；以 `npm view @bookmarkdown/mcp-server version` 確認目前 npm `latest`。

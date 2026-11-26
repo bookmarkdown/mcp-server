@@ -29,6 +29,8 @@ Daemon 連接 agent 與相容的瀏覽器套件，提供有明確範圍的 MCP �
 npx -y @bookmarkdown/mcp-server@latest
 ```
 
+`@latest` 安裝最新 npm 發布版本，目前只含裝置與分頁工具。書籤／標籤查詢、library 寫入工具與分頁讀取已在 source 實作，預定隨下一個版本發布；在此之前請改用[從原始碼安裝](#從原始碼安裝)。詳見[功能與限制](docs/features.md#mcp-工具)。
+
 首次啟動會建立設定檔與兩組獨立 token，不需預設 ENV 或 extension ID。保持終端機開啟，按 Ctrl+C 停止。若要全域安裝，先執行 `npm install --global @bookmarkdown/mcp-server`，再執行 `bookmarkdown-mcp-server`。
 
 ## 從原始碼安裝
