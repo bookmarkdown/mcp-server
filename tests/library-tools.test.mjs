@@ -19,6 +19,28 @@ test('library schemas reject unsafe IDs, unknown fields, excessive tags and enco
   assert.equal(libraryTools.updateTag.inputSchema.safeParse({instanceId, id: 1, input: {name: 'child', color: '', parentId: -1}}).success, false);
 });
 
+test('tags.previewDelete result requires bounded child names and uncategorized counts', () => {
+  const schema = libraryTools.previewDeleteTag.outputSchema;
+  const valid = {directChildCount: 25, descendantTagCount: 30, directBookmarkCount: 3, subtreeBookmarkCount: 9,
+    directChildNames: Array.from({length: 20}, (_, i) => `child-${i}`), uncategorizedCount: {promote: 0, subtree: 4}};
+  assert.ok(schema.safeParse(valid).success);
+  assert.ok(schema.safeParse({...valid, directChildCount: 0, directChildNames: []}).success);
+  const {directChildNames: _names, ...withoutNames} = valid;
+  const {uncategorizedCount: _counts, ...withoutCounts} = valid;
+  for (const candidate of [withoutNames, withoutCounts,
+    {...valid, directChildNames: [...valid.directChildNames, 'child-20']},
+    {...valid, directChildNames: [1]}, {...valid, directChildNames: 'child'},
+    {...valid, directChildNames: ['x'.repeat(2049)]},
+    {...valid, uncategorizedCount: {promote: -1, subtree: 0}},
+    {...valid, uncategorizedCount: {promote: 1.5, subtree: 0}},
+    {...valid, uncategorizedCount: {promote: Number.MAX_SAFE_INTEGER + 1, subtree: 0}},
+    {...valid, uncategorizedCount: {promote: 0}},
+    {...valid, uncategorizedCount: {promote: 0, subtree: 0, extra: 0}},
+    {...valid, uncategorizedCount: null}, {...valid, extra: true}]) {
+    assert.equal(schema.safeParse(candidate).success, false, JSON.stringify(candidate).slice(0, 120));
+  }
+});
+
 test('MCP library tools route every mutation, validate results and never retry timed-out writes', async t => {
   const harness = await createQueryHarness();
   const instanceId = randomUUID();
@@ -37,10 +59,13 @@ test('MCP library tools route every mutation, validate results and never retry t
     if (request.type !== 'browser/request') return;
     requests.push(request);
     if (mode === 'timeout') return;
-    const data = mode === 'bad' ? {status: 'success'} : mode === 'conflict'
+    const data = mode === 'bad' ? {status: 'success'} : mode === 'legacyPreview'
+      ? {directChildCount: 1, descendantTagCount: 2, directBookmarkCount: 3, subtreeBookmarkCount: 4}
+      : mode === 'conflict'
       ? {status: 'conflict', message: 'Bookmark no longer exists'}
       : request.operation === 'tags.previewDelete'
-        ? {directChildCount: 1, descendantTagCount: 2, directBookmarkCount: 3, subtreeBookmarkCount: 4}
+        ? {directChildCount: 1, descendantTagCount: 2, directBookmarkCount: 3, subtreeBookmarkCount: 4,
+          directChildNames: ['拖曳'], uncategorizedCount: {promote: 1, subtree: 2}}
         : {status: 'success', value: {id: mode === 'wrongId' ? 8 : 7}};
     socket.send(JSON.stringify({type: 'browser/response', requestId: request.requestId, ok: true, data}));
   });
@@ -60,6 +85,8 @@ test('MCP library tools route every mutation, validate results and never retry t
     assert.equal(requests.at(-1).operation, name);
     assert.equal(catalog.find(t => t.name === name).annotations.readOnlyHint, name === 'tags.previewDelete');
     if (name !== 'tags.previewDelete') assert.equal(result.value.id, 7);
+    else assert.deepEqual(result, {directChildCount: 1, descendantTagCount: 2, directBookmarkCount: 3,
+      subtreeBookmarkCount: 4, directChildNames: ['拖曳'], uncategorizedCount: {promote: 1, subtree: 2}});
   }
   mode = 'conflict';
   const conflict = await harness.request('tools/call', {name: 'bookmarks.delete', arguments: {instanceId, id: 7}});
@@ -69,6 +96,8 @@ test('MCP library tools route every mutation, validate results and never retry t
   await assert.rejects(harness.call('bookmarks.delete', {instanceId, id: 7}), /INVALID_EXTENSION_RESPONSE/);
   mode = 'wrongId';
   await assert.rejects(harness.call('bookmarks.delete', {instanceId, id: 7}), /INVALID_EXTENSION_RESPONSE/);
+  mode = 'legacyPreview';
+  await assert.rejects(harness.call('tags.previewDelete', {instanceId, id: 7}), /INVALID_EXTENSION_RESPONSE/);
   mode = 'timeout';
   const count = requests.length;
   await assert.rejects(harness.call('bookmarks.create', {instanceId, input: bookmark}), /REQUEST_TIMEOUT/);

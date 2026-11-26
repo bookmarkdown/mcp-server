@@ -191,7 +191,7 @@ export const libraryTools = {
     annotations: {readOnlyHint: false, destructiveHint: true, openWorldHint: false},
   },
   previewDeleteTag: {
-    name: 'tags.previewDelete', description: "Count affected children, descendants and bookmark memberships before deleting a tag. Bookmark entities are preserved by both deletion strategies. Mutations are never automatically retried. After a timeout or disconnect, query the current state before deciding whether to retry.",
+    name: 'tags.previewDelete', description: "Count affected children, descendants and bookmark memberships before deleting a tag. Also returns up to 20 direct child names in tree order (directChildCount is the total) and, per strategy, how many affected bookmarks would be left without an ordinary tag and fall back to Uncategorized. Bookmark entities are preserved by both deletion strategies. Mutations are never automatically retried. After a timeout or disconnect, query the current state before deciding whether to retry.",
     inputSchema: libraryOperationContracts['tags.previewDelete'].payload.safeExtend({instanceId: z.string().uuid()}),
     outputSchema: libraryOperationContracts['tags.previewDelete'].result,
     annotations: {readOnlyHint: true, destructiveHint: false, openWorldHint: false},
