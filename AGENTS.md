@@ -48,7 +48,7 @@ Extension 必須在計數、清單與讀取中排除 incognito 視窗和分頁�
 * 新增或修改 WebSocket 行為時，使用一般 Node.js WebSocket client 測試握手、驗證、request/response 關聯、逾時、斷線、限制與 MCP 結果。測試不得依賴 Chrome 或未實作的 extension。
 * 每次修改後先跑能檢查該行為的窄測試，再依風險執行完整測試、typecheck 和 build。不要宣稱未執行的檢查已通過。
 * 保留 loopback 預設綁定；區網開關接受私有網路 HTTP／WS，不要求 TLS；管理頁仍以 loopback／Host／Origin／CSRF 保護。維持 stdout/stderr 分工和 fail-closed 認證。不得在錯誤訊息或 log 印出 pairing token、敏感 URL 或頁面內容。
-* 已發布的 `@bookmarkdown/mcp-server@0.2.1` 支援 Windows/Linux；目前 source checkout 另支援 macOS。CI 在 Ubuntu、Windows 與 macOS 驗證測試、型別及乾淨套件安裝與 MCP initialize。這不代表真實 extension/MCP host 互通性已驗證。發布前須確認 npm Trusted Publisher 設定可讓 workflow 透過 OIDC 發布。除非使用者明確要求，不得執行實際發布。
+* npm 最新發布版本可能落後 source（以 `npm view @bookmarkdown/mcp-server version` 確認），未發布的 source 功能不得描述為 npm 已提供。CI 在 Ubuntu、Windows 與 macOS 驗證測試、型別及乾淨套件安裝與 MCP initialize。這不代表真實 extension/MCP host 互通性已驗證。發布前須確認 npm Trusted Publisher 設定可讓 workflow 透過 OIDC 發布。除非使用者明確要求，不得執行實際發布。
 
 ## 文件維護
 
@@ -74,7 +74,7 @@ Extension 必須在計數、清單與讀取中排除 incognito 視窗和分頁�
 
 ## Skills
 
-`.agents/skills/` 為唯一位置（VS Code／Copilot／Codex 直接讀取；`.claude/skills` 為給 Claude Code 的 symlink）：`mcp-live-testing`、`security-audit`、`frontend-design`、`grilling`、`grill-with-docs`。只在任務明確符合或使用者要求時使用。
+`.agents/skills/` 為唯一位置（VS Code／Copilot／Codex 直接讀取；`.claude/skills` 為給 Claude Code 的 symlink）：`mcp-live-testing`、`security-audit`、`frontend-design`、`grilling`。只在任務明確符合或使用者要求時使用。
 
 > **Windows**：VS Code、Copilot CLI／雲端 agent 與 Codex 直接讀 `.agents/skills/`，不受影響。只有 Claude Code 需要 `.claude/skills` 這個 Git symlink：在 Windows 上要啟用「開發人員模式」（或以系統管理員身分執行 Git）並設定 `git config --global core.symlinks true`，否則 checkout 後會變成內容只有路徑的純文字檔。若已 clone，設定後執行 `git checkout -- .claude/skills` 重建。
 

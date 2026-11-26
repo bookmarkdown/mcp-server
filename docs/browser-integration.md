@@ -1,111 +1,26 @@
 ---
 title: "瀏覽器整合指南"
 description: "瀏覽器 extension 連線至 BookMarkdown MCP Server 本機或私有區網 WebSocket 協定與 client 範例。"
-ms.date: 2026-11-26
+ms.date: 2026-11-27
 ms.topic: how-to
 ---
 
-## Progressive reading and atomic paths (2026-10-14)
-
-Updated sources add capabilities `browser.searchTabs` and `browser.readTabContent`.
-The complete input, response, cache, error and extraction limits are maintained in
-[features](features.md#agent-大量分頁整理與正文讀取). Existing listTabs is unchanged.
-Bookmark create/update now also accepts explicit tagPaths, resolved in the same
-transaction as content and memberships; omitting both tag inputs preserves update
-memberships. No schema or manifest permission change is required.
-
-Verified on 2026-10-14: server typecheck/build passed; 54 Node tests passed and
-3 platform-specific cases were skipped. The companion extension passed 225 unit
-tests, typecheck/build and 104 real Chrome scenarios across the complete run plus
-follow-up. The first run had two stale server-version expectations and eight
-MCP UX scenarios gated by environment; all ten and both new intake scenarios
-passed the final 12-test run with E2E_MCP_SERVER_VERSION=0.5.0 and E2E_MCP_UX=true.
-The final build covers page extraction limits, form/hidden text exclusion, stable
-pagination, reload/disconnect invalidation and atomic tag-path bookmark writes.
-
-
-
-## Library CRUD contract (source update 2026-10-11)
-
-The updated source build (package version field 0.5.0) adds 10 library operations
-to the existing WebSocket v2 protocol. Both server and companion extension must
-be rebuilt and restarted/reloaded; this change is not an npm release. Tool names
-and wire operation names are identical. MCP arguments include instanceId; the
-WebSocket payload omits it. The strict allowlist and result schemas live in
-[library-contracts.ts](../src/bridge/library-contracts.ts). Argument fields and
-examples are in [features (Traditional Chinese)](features.md#書籤多標籤與樹狀標籤-crud).
-
-New capabilities: bookmarks.create, bookmarks.update, bookmarks.delete,
-bookmarks.replaceTags, bookmarks.setTagMembership, tags.create, tags.createPath,
-tags.update, tags.previewDelete and tags.delete. A client advertises only
-implemented operations; query-only clients return UNSUPPORTED_OPERATION for
-writes. The existing pairing authorizes the selected instance's library tools.
-
-Bookmark create/update accepts optional input.tagIds. Omission preserves existing
-memberships on update; an explicit array replaces them in the same transaction as
-the content edit. Empty arrays use the extension's category fallback. Duplicate
-URLs and invalid tags do not partially update data. Tag update preserves stable
-IDs; deleting a subtree or promoting children preserves bookmark entities.
-
-Mutations return {status: 'success', value: {id}} or a duplicate, invalid
-(field/message), or conflict (message) result. Domain failures use a successful
-browser RPC envelope but MCP isError: true with structuredContent. Unexpected
-database failures use the existing sanitized operation error. previewDelete is
-read-only and returns four nonnegative counts plus `directChildNames` (at most
-20 direct child tag names in tree order; `directChildCount` remains the total)
-and `uncategorizedCount: {promote, subtree}` (affected bookmarks that would fall
-back to Uncategorized under each strategy), matching companion extension ADR 0038.
-All six fields are required and the object is strict, so an extension that still
-returns only the four counts fails with INVALID_EXTENSION_RESPONSE. Input IDs are positive safe
-integers; tag arrays contain at most 500 entries. Encoded tool arguments/payloads
-are limited to 12000 UTF-8 bytes, leaving room in the extension request envelope.
-The connection manager still validates responses against the originating request.
-
-Never automatically retry a write after timeout, cancellation or disconnect: its
-transaction may already have committed. Read current state before retrying.
-No per-agent permission isolation or database SQL tool is introduced.
-
-Verified with the existing Windows/Chrome HTTP harness on 2026-10-11: the server's
-55 Node tests yielded 52 passes and 3 platform skips; typecheck/build passed.
-Companion Chrome acceptance called all 10 operations through real HTTP MCP and
-WebSocket, read writes back in Options, and read UI edits back via MCP. Tests cover
-multi-tag writes, rename/move, cycle rejection, promote/subtree deletion and error
-rollback. This does not certify a specific third-party MCP host.
-
 ## 狀態與驗證範圍
 
-Final repeated validation: two existing connection tests failed with handshake
-timeout/connection reset in the combined Node run; both passed isolated reruns.
-This timing/connection stability limitation remains recorded. The companion
-extension completed its 103 Chrome scenarios across the bounded full run and
-targeted follow-up, including loopback/LAN with the new capabilities.
-
-
-2026-10-09 已使用 npm 發布的 `@bookmarkdown/mcp-server@0.4.0`、BMD extension `0.0.1` source build（基線 `666c2a5` 加上 LAN WS 修改）、Windows、Node.js `24.11.0`、npm `11.4.1`、Playwright `1.63.0` 與 Chrome for Testing `153.0.8010.12` 完成本機與同機私有網卡的真實 WS 串接。Host 是 `bmd-chrome-integration-test/1.0.0` 的 HTTP JSON-RPC client，MCP initialize 協定為 `2025-11-25`，WebSocket 協定為 `2`；並非 Codex、Claude Desktop 或 VS Code 的產品測試。
-
-永久測試在 sibling extension repository 的 `e2e/mcp-integration.spec.ts` 與 `e2e/mcp-server.ts`。兩個情境分別使用 loopback 與 server LAN 模式廣告的 RFC1918 網卡 URL，並各自驗證下表的配對、工具及重啟流程。測試使用原始 production manifest，沒有增加 host grant、LNA bypass、寬鬆 CSP 或 fake extension；兩種 WS 均可直接連線。這不代表最低 Chrome 116、其他 Chrome 版本、跨實體電腦 LAN 或選配 WSS 已驗證。Firefox 依 extension ADR 0012 延後。
-
-上述 npm `0.4.0` 為歷史 WS 基線：companion extension 199 項單元測試、完整 65 項 Chrome E2E、compile/build 通過，125 張附件截圖已檢視。配對引導、輪替提醒與三段健康檢查已包含在 server `0.4.1`；下列驗收使用更新後 server source build，不把 source 測試當成 npm artifact 的額外驗證。
-
-2026-10-09 更新後的 source 驗收：server typecheck/build 通過，Node 測試 47 項中 44 項通過、3 項 Linux WSS／Unix symlink 情境在 Windows 略過。Companion extension 202 項單元測試、compile/Chrome build、完整 69 項 Chrome E2E 通過，152 張附件截圖已檢視。Server HTTP shutdown／upgrade socket 清理修正後，使用最終 build 重跑本機 WS、LAN WS 與四項 P1/P2 UI 情境，6 項全通過、35 張截圖全數檢視；英文／繁中、390px／1440px、亮／暗主題均無水平溢出。健康檢查實際經過 HTTP initialize、tools/list 與已註冊套件的唯讀計數；沒有增加 MCP 工具或瀏覽器異動操作。
-
-| 情境 | 證據／結果 |
+| 範圍 | 狀態 |
 | --- | --- |
-| 管理頁、套件設定頁與註冊 | 兩組 token 分離、錯誤 token、probe、保存、啟用、別名與 server 裝置清單已驗證。Probe 不會註冊裝置。 |
-| 七個 MCP 工具 | initialize、tools/list、devices.list 及六個分頁／視窗工具通過；Chrome API 核對實際 tab/window ID 與異動結果。 |
-| 讀取 | devices.list 含計數、分頁／視窗計數、listTabs limit/offset 分頁通過。 |
-| 異動 | 空白與指定 URL 的 openTab、跨視窗 moveTab、closeTab 通過；同視窗移動被拒絕。 |
-| 生命週期 | server 重啟與 Chrome 同 profile 重啟後重新註冊，UUID 保持不變；停用後工具回 EXTENSION_NOT_CONNECTED。 |
-| UI、輸出 | 英文桌面、繁中 390px 設定頁與 server 桌面／窄版無水平溢出；page/background console 無錯誤，daemon stdout 空白、stderr 不含 token。 |
-| 尚未驗證 | 真實遠端 WSS/TLS 信任、跨機器 LAN/防火牆、incognito 真實視窗、長時間 MV3 閒置與 sleep/wake、Chrome 116、指定產品 host。Node contract／單元測試不能替代以上證據。 |
+| Server WebSocket／HTTP contract | tested：Node.js WebSocket client 與 HTTP MCP 測試涵蓋握手、認證、路由、逾時、取消、限制與各 operation schema。不依賴 Chrome。 |
+| 裝置與分頁工具（`devices.list` 與六個分頁／視窗工具）真實串接 | verified：2026-10-09，npm `0.4.0`、BMD `0.0.1` source build、Windows、Node.js `24.11.0`、npm `11.4.1`、Playwright `1.63.0`、Chrome for Testing `153.0.8010.12`；loopback 與同機私有網卡 WS、配對、實際分頁異動、server／Chrome 重啟後重新註冊。 |
+| 書籤查詢、library operations、分頁讀取、配對引導、健康檢查與一鍵配對 | verified with source builds：companion extension 以 Windows／Chrome 經真實 HTTP MCP 與 WebSocket 驗收；未對 npm artifact 重測。 |
+| 遠端 WSS／TLS 信任、跨實體 LAN／防火牆、incognito 真實視窗、長時間 MV3 閒置與 sleep/wake、Chrome 116 及其他版本、指定 MCP 產品 host | not verified：Node contract／單元測試不能替代這些證據。 |
 
-Browser integration 文件應涵蓋的範圍與維護規則見[文件規約](documentation-conventions.md)。
+測試 host 是 `bmd-chrome-integration-test/1.0.0` HTTP JSON-RPC client（MCP initialize `2025-11-25`、WebSocket 協定 `2`），並非 Codex、Claude Desktop 或 VS Code 的產品測試。永久測試在 companion extension repository 的 `e2e/mcp-integration.spec.ts` 與 `e2e/mcp-server.ts`，使用原始 production manifest，沒有額外 host grant、LNA bypass、寬鬆 CSP 或 fake extension。Firefox 依 extension ADR 0012 延後。文件應涵蓋的範圍見[文件規約](documentation-conventions.md)。
 
-一鍵配對的歷史驗收使用 server source `0.4.1` 加上當時修改：Node 測試 49 項中 46 項通過、3 項 Windows 不適用情境略過，typecheck/build 通過；companion extension 205 項單元測試、compile/build 通過。Chrome 完整執行 74 項，72 項通過，2 項因既有版本預期 `0.4.0` 與 source `0.4.1` 不同而失敗；指定實際版本重跑後兩項通過，沒有 flaky 或隱藏重試。兩份報告共 169 張截圖已檢視。新增四項涵蓋英文／繁中、亮／暗、390px／1440px 的真實管理頁跳轉與草稿匯入；也驗證 Options 單例、測試不保存、明確啟用、複製連結及錯誤 token／無效 fragment 不改已保存設定。一項使用同機私有網卡，其餘使用 loopback；跨實體 LAN 仍未驗證。連結功能已包含在 server `0.4.1` release tag；這裡保留原始 source 驗收範圍，不宣稱重新測過 npm artifact。操作見[設定指南](settings.zh-TW.md#一鍵套件配對)。
+完整要求與重跑指令見 [companion extension 整合指南](https://github.com/bookmarkdown/bmd-extension/blob/main/docs/mcp-integration.md)。先建置本 repository，將 `E2E_MCP_SERVER_DIR` 指向 source checkout 並設定 `E2E_MCP_UX=true`，再從 extension 執行 `pnpm run test:e2e --workers=1 '--reporter=list,html'`。Harness 建立獨立 config、隨機 port 與 Chrome profile，最後只清理自己的狀態。
 
 ## 實際設定流程
 
-1. 安裝 Node.js `22.23.3` 以上版本。使用 `npx -y @bookmarkdown/mcp-server@latest`，或建置 source checkout 後執行 `npm start`。配對引導、健康檢查與一鍵配對需 server `0.4.1` 或更新版本及相容的新版套件；`0.4.0` 僅是上方測試的歷史 WS 基線。保持終端機開啟，首次產生設定檔及兩組 token，不需先設定 ENV 或 extension ID。
+1. 安裝 Node.js `22.23.3` 以上版本。使用 `npx -y @bookmarkdown/mcp-server@latest`，或建置 source checkout 後執行 `npm start`；最新 npm 版本可能尚未包含 source-only 工具，見[功能文件](features.md#mcp-工具)。保持終端機開啟，首次產生設定檔及兩組 token，不需先設定 ENV 或 extension ID。
 2. 開啟終端機列出的管理頁，通常是 `http://127.0.0.1:38472/`。從「瀏覽器套件」卡片複製 WebSocket URL 與配對 token。
 3. 在 BMD「設定 → MCP」貼入上述兩個值，按「測試連線」；成功表示 token 與 WebSocket v2 probe 通過，尚未保存或註冊裝置。
 4. 按「儲存並啟用」，或先「儲存」再勾選「保持 bridge 連線」。步驟列分清驗證、儲存與註冊。套件顯示「已連線」，管理頁出現裝置名稱才算持久連線完成；別名設定放在配對後，UUID 跨重連保持不變。
@@ -118,30 +33,13 @@ Browser integration 文件應涵蓋的範圍與維護規則見[文件規約](doc
 | WebSocket URL + 配對 token | Chrome 套件 | `ws://127.0.0.1:38471/`，token 放 hello 訊息，不能放 URL。 |
 | 管理頁 URL | 啟動 daemon 的電腦 | `http://127.0.0.1:38472/`，不用貼到套件 endpoint 欄位。 |
 
-Server `0.4.1` 與相容的新版套件支援管理頁一鍵帶入：預填指定的 Chrome ID `kdnjdggdbibdliholcdkmdkajacdmnhd`，可改開發版 ID；選執行中的本機／LAN WS 端點，按「連接 Chrome 套件」，套件清除片段參數、帶入草稿並提示測試。只有「儲存並啟用」才更新設定及註冊。可明確複製含配對 token 的連結，貼入另一台已安裝套件的 Chrome 網址列，詳見[設定指南](settings.zh-TW.md#一鍵套件配對)。
-
-`POST /api/pairing-link` 沿用本機／Host／Origin／CSRF 保護，只接受有效 ID 及當前廣告端點，採用目前生效的 bridge token。這是使用者授權的 credential fragment handoff，不是把 token 放進 WS endpoint URL，也不改 HTTP Bearer 或 hello wire contract。Options HTML 只允許本機 HTTP 管理頁來源直接開啟；沒有新增 MCP 工具或外部 runtime 操作。
-
-Server 設定保存與 token 重建後，重啟才生效。重啟前複製／顯示按鈕仍取執行中 token，並標示待生效角色；重啟後提醒更新 Agent 與先前已知裝置。提醒只在管理瀏覽器同源 localStorage 保存無秘密的角色、設定／process 身分及最多 64 個裝置別名／UUID，使用者確認後隱藏；不是 server 端客戶端確認 registry。改 origin／port、清除／禁用儲存或換瀏覽器可能使提醒不保留，詳見[設定指南](settings.md)。
-
-管理頁明確觸發健康檢查時，以執行中 HTTP MCP URL／token 執行 initialize、tools/list 及選定線上裝置的 `browser.countOpenTabs`，六秒總逾時。三段狀態分開 HTTP 可用、已註冊與讀取通過；沒有裝置時讀取不執行。此操作不異動分頁、不新增 MCP 工具，也不能代替指定產品 host 的設定驗收。
+管理頁也提供一鍵配對（`POST /api/pairing-link` 以 URL fragment 帶入執行中 bridge token，不改 hello wire contract）、重啟後更新客戶端提醒，以及唯讀健康檢查；完整說明見[設定指南](settings.zh-TW.md#一鍵套件配對)。
 
 ## 難度、取捨與 UX
 
 同機串接評估為低到中：已安裝 Node 與 extension 時，不需固定 ID、ENV 或憑證，但需要分辨兩組 URL/token，並完成測試、保存、啟用。新手或另一種 MCP host 為中等：涉及 Node 安裝、終端機生命週期與 HTTP/Bearer 支援。可信任 LAN 串接為中等：啟用 server LAN、重啟、使用私有 IPv4 的 WS URL 即可，不需憑證；跨實體裝置仍需確認防火牆與路由。這些是流程的質性評估，沒有做新手耗時或可用性研究。
 
-優點：單一 daemon 共用多裝置／agent、extension 主動連線、獨立 tokens、穩定 UUID、受限工具與 schema、逾時／斷線不重播異動。代價：需維持 daemon 執行、token 為本機明文設定、agent 共用權限與額度、沒有同一分頁操作鎖；現行 source 共提供 19 個工具，包含分頁／裝置、書籤／標籤查詢與 CRUD；未提供跨裝置搬移瀏覽器 session。
-
-以下 P1/P2 已加入目前 source，維持本機／LAN WS 與現有認證邊界：
-
-| 優先級 | 實際問題 | 改善與驗收方向 |
-| --- | --- | --- |
-| 已處理 | Server LAN WS URL 與原套件 TLS 規則不相容。 | 依 2026-10-09 使用者決定，更新 BMD endpoint 驗證、兩種語系與文件；本機／RFC1918 LAN WS 不強制 TLS，保留 token 與來源檢查。 |
-| P1 | 分清 token 與配對階段 | 角色引導及秘密占位符樣板、明確 Save and enable、操作旁提示；token 標示執行中／待生效與重啟後更新提醒。 |
-| P1 | 無裝置仍可設定 | 保留 `EXTENSION_NOT_CONNECTED`／`isError` 契約並提供先啟用套件的具體步驟，不改成空陣列。 |
-| P2 | 診斷與退避 | 三段唯讀健康檢查、可操作的網路／token／選用 TLS／LNA 檢查及實際重試倒數；泛用網路錯誤不斷言原因，異動不重送。 |
-
-完整要求、重跑指令及最新驗收見 [sibling extension 整合指南](../../bmd-extension/docs/mcp-integration.md)。新版需先建置本 repository，將 `E2E_MCP_SERVER_DIR` 指向 source checkout 並設定 `E2E_MCP_UX=true`，再從 extension 執行 `pnpm run test:e2e --workers=1 '--reporter=list,html'`。只使用 npm `0.4.0` 則不能啟用新版 UX 情境。Harness 建立獨立 config、隨機 port 與 Chrome profile，最後只清理自己的狀態。
+優點：單一 daemon 共用多裝置／agent、extension 主動連線、獨立 tokens、穩定 UUID、受限工具與 schema、逾時／斷線不重播異動。代價：需維持 daemon 執行、token 為本機明文設定、agent 共用權限與額度、沒有同一分頁操作鎖；現行 source 共提供 21 個工具，包含分頁／裝置、分頁讀取、書籤／標籤查詢與 CRUD；未提供跨裝置搬移瀏覽器 session。
 
 ## Agent 連線
 
@@ -225,7 +123,7 @@ server 目前使用的拒絕原因如下：
 計數與清單只涵蓋一般視窗和分頁。Extension 必須排除 incognito 視窗與分頁，因為 server 無法檢查 extension 回傳的瀏覽器資料。`browser.openTab` 的目標、`browser.closeTab` 的分頁，以及 `browser.moveTab` 的來源和目的地也必須依一般視窗政策處理；`moveTab` 只支援跨視窗移動，不提供同視窗排序或 index。
 
 > [!WARNING]
-> 分頁標題與 URL 可能包含敏感資訊，會由 MCP tool 回傳給呼叫端。下列分頁工具只回傳有界 metadata；唯一回傳頁面文字的是 `browser.readTabContent`（見[漸進式讀取](#progressive-reading-and-atomic-paths-2026-10-14)）。不要記錄標題、URL、頁面文字或 operation payload。
+> 分頁標題與 URL 可能包含敏感資訊，會由 MCP tool 回傳給呼叫端。下列分頁工具只回傳有界 metadata；唯一回傳頁面文字的是 `browser.readTabContent`（見 [Tab reading operations](#tab-reading-operations)）。不要記錄標題、URL、頁面文字或 operation payload。
 
 `tabId`、`windowId` 與 `targetWindowId` 都是非負安全整數。所有 success `data` 都使用 strict schema；多餘欄位或無效結果會被拒絕。
 
@@ -382,6 +280,19 @@ server 目前使用的拒絕原因如下：
 }
 ```
 
+### Tab reading operations
+
+`browser.searchTabs` 與 `browser.readTabContent` 的 operation 名稱與 MCP tool 相同，輸入、回覆、快照、錯誤與擷取上限見[功能文件](features.md#agent-大量分頁整理與正文讀取)。`browser.listTabs` 維持既有 offset 行為。讀取錯誤 `CURSOR_EXPIRED`、`INVALID_CURSOR`、`TAB_NOT_READABLE`、`PAGE_CHANGED`、`SNAPSHOT_TOO_LARGE` 只對這兩個 operation 原樣轉送，其他 extension 錯誤仍映射為 `EXTENSION_OPERATION_FAILED`。Server schema 來源為 [reading-contracts.ts](../src/bridge/reading-contracts.ts)。
+
+### Library operations
+
+`bookmarks.create`、`bookmarks.update`、`bookmarks.delete`、`bookmarks.replaceTags`、`bookmarks.setTagMembership`、`tags.create`、`tags.createPath`、`tags.update`、`tags.previewDelete` 與 `tags.delete` 沿用 WebSocket v2。Tool 名稱與 wire operation 名稱相同；MCP 參數含 `instanceId`，WebSocket `payload` 不含。Client 只宣告已實作的 operation，只支援查詢的 client 對寫入回 `UNSUPPORTED_OPERATION`；既有配對即授權所選 instance 的 library tools。MCP 層的參數、範例與 `tagPaths` 語意見[功能文件](features.md#書籤多標籤與樹狀標籤-crud)，strict allowlist 與 result schemas 見 [library-contracts.ts](../src/bridge/library-contracts.ts)。
+
+* ID 為正安全整數；tag 陣列最多 500 個，`tagPaths` 最多 50 條。編碼後 payload 上限 12000 UTF-8 bytes，保留 extension request envelope 空間。
+* 寫入回覆 `{status: "success", value: {id}}`，或 `duplicate`、`invalid`（`field`／`message`）、`conflict`（`message`）。Domain 失敗使用成功的 browser RPC envelope，MCP 以 `isError: true` 與 `structuredContent` 回傳；非預期資料庫錯誤沿用 sanitized operation error。
+* `tags.previewDelete` 的 result 是 strict object，六個欄位皆必要（對應 extension ADR 0038）；只回四個計數欄位的舊版 extension 會得到 `INVALID_EXTENSION_RESPONSE`。
+* 逾時、取消或斷線後不得自動重送寫入，交易可能已提交；先讀取目前狀態再決定。未新增每個 agent 的權限隔離或 SQL 工具。
+
 ### Response handling
 
 所有 response 必須在收到 request 的同一條 WebSocket 上回覆，並沿用相同 UUID `requestId`。不同 socket 上的回覆、未知 ID 或逾時後才抵達的回覆會被忽略；多個請求可以依 UUID 配對，不必依送出順序回覆。
@@ -503,9 +414,9 @@ const socket = connectExtension(pairingToken, instanceId, browserOperations);
 
 ## 逾時、關閉與限制
 
-hello 預設須在 5 秒內送達；browser request 預設等待 5 秒，可用 `BOOKMARKDOWN_REQUEST_TIMEOUT_MS` 設定。WebSocket 預設 payload 上限為 64 KiB、同時連線上限為 8、in-flight request 上限為 32、註冊 instance 上限為 64。各項設定由 daemon 管理。
+hello 預設須在 5 秒內送達；browser request 預設等待 5 秒，可用 `BOOKMARKDOWN_REQUEST_TIMEOUT_MS` 設定。WebSocket 預設 payload 上限為 64 KiB、同時連線上限為 8、in-flight request 上限為 32、註冊 instance 上限為 64，完整說明見[容量上限](settings.zh-TW.md#容量上限)。
 
 socket 中斷會讓該連線上的 pending request 失敗，instance 在 daemon 的記憶體 registry 中標為 offline；daemon 重啟時 registry 清空。相同 `instanceId` 與 extension ID 再次註冊會取代舊連線，舊 socket 以 close code `4001`、reason `replaced` 關閉；相同 instance ID 搭配不同 extension ID 則遭拒。連線逾時或中斷後，server 不會替 client 重連。
 
-Server 不會替 client 重連。更新後的 companion extension 對網路錯誤／hello 逾時使用 1／2／4／8／16／30 秒退避（不加抖動），顯示實際 deadline；停用或認證／協定拒絕會停止，成功註冊後重設。精確序列及清理已由 fake-timer 單元測試驗證，Chrome 測試驗證倒數、重啟與換 token 恢復；不代表長時間 MV3 liveness 或 sleep/wake 已驗證。重連不重播 browser RPC。
+Companion extension 對網路錯誤／hello 逾時使用 1／2／4／8／16／30 秒退避（不加抖動），顯示實際 deadline；停用或認證／協定拒絕會停止，成功註冊後重設。精確序列及清理已由 fake-timer 單元測試驗證，Chrome 測試驗證倒數、重啟與換 token 恢復；不代表長時間 MV3 liveness 或 sleep/wake 已驗證。重連不重播 browser RPC。
 原 manifest/CSP 在已測 Chrome 版本的 loopback 與同機私有網卡 WS 連線不需追加 host grant；其他版本、跨實體電腦 LAN、其他 LNA 位址類別、選配 WSS 與指定產品 host 仍需分別驗證。

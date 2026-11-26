@@ -2,7 +2,7 @@
 title: Local settings and LAN access
 description: Persistent per-user configuration, local management page, and optional private-network access
 status: accepted
-ms.date: 2026-10-03
+ms.date: 2026-11-27
 ms.topic: architecture
 ---
 
@@ -26,4 +26,4 @@ Check configuration creation/reuse, permissions, malformed files, environment ov
 
 ## Consequences and implementation result
 
-Implemented the accepted scope. Windows checks pass: 44 tests, typecheck, build, and packed-artifact configuration/assets/status/MCP smoke. Three platform-specific tests are skipped. Clean npm installation is blocked by registry access restrictions. Browser security policy denied local UI navigation, so visual layout and actual browser interactions remain unverified; no alternate browser route was attempted.
+Implemented the accepted scope. Configuration, management page and LAN behavior are covered by the repository's Node.js tests; real browser and extension integration is tracked in the [browser integration guide](../browser-integration.md).
