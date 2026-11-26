@@ -1,5 +1,11 @@
 # @bookmarkdown/mcp-server
 
+## 0.6.0
+
+### Minor Changes
+
+- 6fc0542: Add browser.searchTabs and browser.readTabContent for filtered tab discovery and bounded page-text reading (the only tool that returns page content). tags.previewDelete now returns directChildNames and uncategorizedCount to match the companion extension.
+
 ## 0.5.0
 
 ### Minor Changes
